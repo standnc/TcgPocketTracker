@@ -474,42 +474,6 @@ export function registerRoundTools(server: McpServer): void {
       const editError = assertEditable(round);
       if (editError) return errorResult(editError);
       const db = getDb();
-      const observations = (
-        db
-          .prepare(
-            `
-        SELECT card_number, state, quantity, confidence, confirmed, source
-        FROM capture_round_cards WHERE round_id=? ORDER BY card_number
-      `,
-          )
-          .all(round_id) as RoundCardRow[]
-      ).map(toObservation);
-      const numbers = expansionNumbers(round.expansion_id);
-      const previousQuantities = new Map<number, number>(
-        (
-          db
-            .prepare(
-              `
-          SELECT c.number AS number, COALESCE(o.quantity,0) AS quantity FROM cards c
-          LEFT JOIN owned o ON o.card_id=c.id WHERE c.expansion_id=?
-        `,
-            )
-            .all(round.expansion_id) as { number: number; quantity: number }[]
-        ).map((row) => [row.number, row.quantity]),
-      );
-      const plan = planFinalize({
-        expansion_id: round.expansion_id,
-        expected_total: round.expected_total,
-        quantity_mode: round.quantity_mode,
-        expected_owned_unique:
-          expected_owned_unique ?? round.expected_owned_unique,
-        observations,
-        use_auto_detections,
-        expansion_numbers: numbers,
-        previous_quantities: previousQuantities,
-      });
-      if (!plan.ok) return errorResult(plan.message);
-
       const writeOwned = db.prepare(`
         INSERT INTO owned (card_id, quantity, updated_at) VALUES (?, ?, ?)
         ON CONFLICT(card_id) DO UPDATE SET quantity=excluded.quantity, updated_at=excluded.updated_at
@@ -523,8 +487,50 @@ export function registerRoundTools(server: McpServer): void {
           previous_quantity=excluded.previous_quantity, applied_quantity=excluded.applied_quantity,
           updated_at=excluded.updated_at
       `);
-      const now = new Date().toISOString();
-      db.transaction(() => {
+      const finalizeTransaction = db.transaction(() => {
+        // Read, plan and write under one immediate transaction. A separate MCP
+        // process sharing PTCGP_DATA_DIR cannot change an owned quantity between
+        // the `minimum`-mode preservation calculation and its corresponding write.
+        const observations = (
+          db
+            .prepare(
+              `
+            SELECT card_number, state, quantity, confidence, confirmed, source
+            FROM capture_round_cards WHERE round_id=? ORDER BY card_number
+          `,
+            )
+            .all(round_id) as RoundCardRow[]
+        ).map(toObservation);
+        const numbers = expansionNumbers(round.expansion_id);
+        const previousQuantities = new Map<number, number>(
+          (
+            db
+              .prepare(
+                `
+                SELECT c.number AS number, COALESCE(o.quantity,0) AS quantity FROM cards c
+                LEFT JOIN owned o ON o.card_id=c.id WHERE c.expansion_id=?
+              `,
+              )
+              .all(round.expansion_id) as {
+              number: number;
+              quantity: number;
+            }[]
+          ).map((row) => [row.number, row.quantity]),
+        );
+        const plan = planFinalize({
+          expansion_id: round.expansion_id,
+          expected_total: round.expected_total,
+          quantity_mode: round.quantity_mode,
+          expected_owned_unique:
+            expected_owned_unique ?? round.expected_owned_unique,
+          observations,
+          use_auto_detections,
+          expansion_numbers: numbers,
+          previous_quantities: previousQuantities,
+        });
+        if (!plan.ok) return plan;
+
+        const now = new Date().toISOString();
         for (const write of plan.writes) {
           writeOwned.run(write.card_id, write.applied, now);
           writeAudit.run({
@@ -549,9 +555,12 @@ export function registerRoundTools(server: McpServer): void {
         db.prepare(
           `
           UPDATE capture_rounds SET status='applied', expected_owned_unique=?, updated_at=?, finalized_at=?, summary=? WHERE id=?
-        `,
+          `,
         ).run(plan.expected_owned_unique, now, now, summary, round_id);
-      })();
+        return plan;
+      });
+      const plan = finalizeTransaction.immediate();
+      if (!plan.ok) return errorResult(plan.message);
       return textResult({
         round_id,
         expansion: round.expansion_id,

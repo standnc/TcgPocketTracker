@@ -90,7 +90,7 @@ The desired direction is documented in `ARCHITECTURE.md`: MCP, a future CLI, and
 
 ## Recommended next phase: generic core
 
-Phase 2 is partially done (2026-08-28). The framework-free rules now live in `src/domain/` (`rounds.ts`, `collection.ts`, `errors.ts`); the MCP tools are thin adapters over them; remote responses are Zod-validated (`src/remote-validation.ts`); and a consistent backup is taken before a data-bearing migration (`backupBeforeMigration` in `src/db.ts`). 33 tests pass; `npm run verify` and `npm audit --omit=dev` are clean.
+Phase 2 is partially done (2026-08-28). The framework-free rules now live in `src/domain/` (`rounds.ts`, `collection.ts`, `errors.ts`); the MCP tools are thin adapters over them; remote responses are Zod-validated (`src/remote-validation.ts`); and a consistent backup is taken before a data-bearing migration (`backupBeforeMigration` in `src/db.ts`). Round finalization reads, plans, and writes inside one immediate SQLite transaction, preserving higher quantities against concurrent local MCP processes. 34 tests pass; `npm run verify` and `npm audit --omit=dev` are clean.
 
 Status of the original ordered list:
 

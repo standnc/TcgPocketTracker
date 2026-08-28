@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
 import { parseRemote } from "../remote-validation.js";
-import { rawCardsSchema, rawExpansionsSchema } from "../sync.js";
+import {
+  rawCardsSchema,
+  rawExpansionsSchema,
+  tcgdexCardSchema,
+} from "../sync.js";
 import { deckCardSchema, metaDeckSchema } from "../limitless.js";
 
 test("parseRemote devuelve los datos cuando el esquema valida", () => {
@@ -82,6 +86,19 @@ test("rawExpansionsSchema exige el nombre de cada sobre", () => {
         "expansions.json",
       ),
     /packs\.0\.name/,
+  );
+});
+
+test("tcgdexCardSchema rechaza respuestas que no identifican una carta", () => {
+  const card = parseRemote(
+    tcgdexCardSchema,
+    { id: "A1-001", name: "Bulbasaur", category: "Pokemon" },
+    "TCGdex",
+  );
+  assert.equal(card.id, "A1-001");
+  assert.throws(
+    () => parseRemote(tcgdexCardSchema, { error: "rate limited" }, "TCGdex"),
+    /TCGdex.*id/,
   );
 });
 

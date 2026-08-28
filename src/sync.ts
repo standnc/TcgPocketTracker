@@ -160,7 +160,12 @@ interface TcgdexCard {
 // shape the enrichment relies on (scalars typed when present; the three lists
 // must be arrays). Elements stay `unknown`: they are re-serialized verbatim, so
 // they are validated as a gate but stored from the original untouched payload.
-const tcgdexCardSchema = z.object({
+export const tcgdexCardSchema = z.object({
+  // A successful TCGdex card response always identifies the requested card.
+  // Requiring these fields prevents a 200 JSON error payload (or `{}`) from
+  // falsely marking a local card as enriched.
+  id: z.string().min(1),
+  name: z.string().min(1),
   category: z.string().optional(),
   stage: z.string().optional(),
   evolveFrom: z.string().optional(),
