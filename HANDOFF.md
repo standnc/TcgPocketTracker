@@ -5,12 +5,17 @@ Last updated: 2026-08-28. This file is the operational starting point for a futu
 ## Repository and safety status
 
 - Working repository: `/home/pedro/proyectos/ptcgp-mcp-server` in Kali WSL.
-- Documentation branch: `open-source-prep` (currently based on the same preparation commit as `main`). Do not switch branches, reset, or discard pending documentation without the owner’s instruction.
+- Working branch: `open-source-prep`. It contains the completed Phase 2 work and is ahead of `main`; continue from this branch. Do not switch branches, reset, or discard commits without the owner’s instruction.
 - Preparation commits:
   - `587166a chore: establish safe open source baseline`
   - `499fd2a docs: add web tracker implementation plan`
   - `8435178 chore: modernize MCP runtime baseline`
-- No Git remote is configured at the time of this handoff. Nothing has been pushed, published to npm, registered in MCP registries, or deployed.
+  - `62ba289 refactor(rounds): extract capture-round rules to a framework-free domain`
+  - `f56cc0e refactor(collection): extract mutation rules to the domain and dedupe setQty`
+  - `45f37c3 feat(remote): validate untrusted network responses with Zod`
+  - `176cfb8 feat(db): consistent SQLite backup before migrations + phase-2 docs`
+  - `b4aebd6 fix: protect round finalization and TCGdex enrichment`
+- Git remote: `origin` is `https://github.com/standnc/TcgPocketTracker.git`; this branch tracks `origin/open-source-prep`. The owner authorized this branch’s push. Do not publish to npm, register in MCP registries, or deploy without a separate explicit instruction.
 - `package.json` has `"private": true`; retain it until the owner explicitly authorizes publication.
 - Production SQLite databases, WAL/SHM files, backups, captures, cookies, tokens, `.env` files, logs, and temporary outputs must remain outside Git. `.gitignore` protects these paths, but an ignored file is still private and must not be copied into fixtures or documentation.
 - Tests and smoke checks must use a temporary `PTCGP_DATA_DIR`. Do not run a migration, sync, OCR round, or recovery test against the owner’s live directory without explicit approval and a verified SQLite-aware backup.
