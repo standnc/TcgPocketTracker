@@ -2,9 +2,20 @@ import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { analyzeScreenshots } from "../screenshot-analyzer.js";
-import { catalogIsEmpty, EMPTY_CATALOG_MSG, getDb } from "../db.js";
+import {
+  catalogIsEmpty,
+  EMPTY_CATALOG_MSG,
+  getDb,
+  inTransaction,
+  inImmediateTransaction,
+} from "../db.js";
 import { parseNumbers } from "../domain/collection.js";
 import { ownedRepo } from "../repositories/owned.js";
+import {
+  roundsRepo,
+  type RoundRow,
+  type RoundCardRow,
+} from "../repositories/rounds.js";
 import {
   classifyDetections,
   planFinalize,
@@ -13,29 +24,6 @@ import {
   validateRoundStart,
   type RoundObservation,
 } from "../domain/rounds.js";
-
-interface RoundRow {
-  id: string;
-  expansion_id: string;
-  label: string | null;
-  status: "open" | "review" | "applied" | "cancelled";
-  quantity_mode: "minimum" | "exact";
-  expected_total: number;
-  expected_owned_unique: number | null;
-  created_at: string;
-  updated_at: string;
-  finalized_at: string | null;
-  summary: string | null;
-}
-
-interface RoundCardRow {
-  card_number: number;
-  state: "owned" | "missing";
-  quantity: number | null;
-  confidence: number;
-  confirmed: number;
-  source: string | null;
-}
 
 function textResult(output: Record<string, unknown>) {
   return {
@@ -52,9 +40,7 @@ function errorResult(message: string) {
 }
 
 function getRound(id: string): RoundRow | undefined {
-  return getDb()
-    .prepare("SELECT * FROM capture_rounds WHERE id = ?")
-    .get(id) as RoundRow | undefined;
+  return roundsRepo().get(id);
 }
 
 function assertEditable(round: RoundRow): string | null {
@@ -138,24 +124,16 @@ export function registerRoundTools(server: McpServer): void {
       if (startError) return errorResult(startError.message);
       const now = new Date().toISOString();
       const id = `${exp}-${now.slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8)}`;
-      getDb()
-        .prepare(
-          `
-        INSERT INTO capture_rounds
-          (id, expansion_id, label, status, quantity_mode, expected_total, expected_owned_unique, created_at, updated_at)
-        VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?)
-      `,
-        )
-        .run(
-          id,
-          exp,
-          label ?? null,
-          quantity_mode,
-          numbers.length,
-          expected_owned_unique ?? null,
-          now,
-          now,
-        );
+      roundsRepo().create({
+        id,
+        expansion_id: exp,
+        label: label ?? null,
+        quantity_mode,
+        expected_total: numbers.length,
+        expected_owned_unique: expected_owned_unique ?? null,
+        created_at: now,
+        updated_at: now,
+      });
       return textResult({
         round_id: id,
         expansion: exp,
@@ -193,23 +171,9 @@ export function registerRoundTools(server: McpServer): void {
           image_paths,
           round.expected_total,
         );
-        const db = getDb();
-        const currentOrder = (
-          db
-            .prepare(
-              "SELECT COALESCE(MAX(capture_order), -1) AS n FROM capture_round_images WHERE round_id = ?",
-            )
-            .get(round_id) as { n: number }
-        ).n;
-        const confirmedOwned = new Set(
-          (
-            db
-              .prepare(
-                "SELECT card_number FROM capture_round_cards WHERE round_id = ? AND confirmed = 1 AND state = 'owned'",
-              )
-              .all(round_id) as { card_number: number }[]
-          ).map((row) => row.card_number),
-        );
+        const repo = roundsRepo();
+        const currentOrder = repo.maxCaptureOrder(round_id);
+        const confirmedOwned = repo.confirmedOwnedNumbers(round_id);
         const { contradictions, upserts } = classifyDetections(
           confirmedOwned,
           analyses.map((analysis) => ({
@@ -217,28 +181,10 @@ export function registerRoundTools(server: McpServer): void {
             detected_missing: analysis.detected_missing,
           })),
         );
-        const insertImage = db.prepare(`
-          INSERT INTO capture_round_images
-            (round_id, path, sha256, width, height, capture_order, analysis, created_at)
-          VALUES (@round_id, @path, @sha256, @width, @height, @capture_order, @analysis, @created_at)
-          ON CONFLICT(round_id, sha256) DO UPDATE SET
-            path=excluded.path, width=excluded.width, height=excluded.height, analysis=excluded.analysis
-        `);
-        const upsertDetection = db.prepare(`
-          INSERT INTO capture_round_cards
-            (round_id, card_number, state, quantity, confidence, confirmed, source, updated_at)
-          VALUES (?, ?, 'missing', 0, ?, 0, ?, ?)
-          ON CONFLICT(round_id, card_number) DO UPDATE SET
-            state=CASE WHEN capture_round_cards.confirmed=0 THEN 'missing' ELSE capture_round_cards.state END,
-            quantity=CASE WHEN capture_round_cards.confirmed=0 THEN 0 ELSE capture_round_cards.quantity END,
-            confidence=CASE WHEN capture_round_cards.confirmed=0 THEN MAX(capture_round_cards.confidence, excluded.confidence) ELSE capture_round_cards.confidence END,
-            source=CASE WHEN capture_round_cards.confirmed=0 THEN excluded.source ELSE capture_round_cards.source END,
-            updated_at=excluded.updated_at
-        `);
         const now = new Date().toISOString();
-        db.transaction(() => {
+        inTransaction(() => {
           analyses.forEach((analysis, index) => {
-            insertImage.run({
+            repo.insertImage({
               round_id,
               path: analysis.path,
               sha256: analysis.sha256,
@@ -250,27 +196,18 @@ export function registerRoundTools(server: McpServer): void {
             });
           });
           for (const detection of upserts) {
-            upsertDetection.run(
+            repo.upsertDetection({
               round_id,
-              detection.card_number,
-              detection.confidence,
-              detection.source,
-              now,
-            );
+              card_number: detection.card_number,
+              confidence: detection.confidence,
+              source: detection.source,
+              updated_at: now,
+            });
           }
-          db.prepare(
-            "UPDATE capture_rounds SET status='review', updated_at=? WHERE id=?",
-          ).run(now, round_id);
-        })();
+          repo.setStatus(round_id, "review", now);
+        });
 
-        const detected = db
-          .prepare(
-            `
-          SELECT card_number AS number, confidence, confirmed, source
-          FROM capture_round_cards WHERE round_id=? AND state='missing' ORDER BY card_number
-        `,
-          )
-          .all(round_id);
+        const detected = repo.detectedMissing(round_id);
         return textResult({
           round_id,
           images_analyzed: analyses.length,
@@ -348,17 +285,10 @@ export function registerRoundTools(server: McpServer): void {
         });
         if (!plan.ok) return errorResult(plan.message);
         const now = new Date().toISOString();
-        const upsert = getDb().prepare(`
-          INSERT INTO capture_round_cards
-            (round_id, card_number, state, quantity, confidence, confirmed, source, updated_at)
-          VALUES (@round_id, @card_number, @state, @quantity, 1, 1, 'confirmed-review', @updated_at)
-          ON CONFLICT(round_id, card_number) DO UPDATE SET
-            state=excluded.state, quantity=excluded.quantity, confidence=1, confirmed=1,
-            source=excluded.source, updated_at=excluded.updated_at
-        `);
-        getDb().transaction(() => {
+        const repo = roundsRepo();
+        inTransaction(() => {
           for (const item of plan.upserts) {
-            upsert.run({
+            repo.upsertConfirmed({
               round_id,
               card_number: item.card_number,
               state: item.state,
@@ -366,12 +296,8 @@ export function registerRoundTools(server: McpServer): void {
               updated_at: now,
             });
           }
-          getDb()
-            .prepare(
-              "UPDATE capture_rounds SET status='review', updated_at=? WHERE id=?",
-            )
-            .run(now, round_id);
-        })();
+          repo.setStatus(round_id, "review", now);
+        });
         return textResult({
           round_id,
           confirmed_missing: plan.confirmed_missing,
@@ -401,43 +327,14 @@ export function registerRoundTools(server: McpServer): void {
       },
     },
     async ({ round_id }) => {
-      const db = getDb();
+      const repo = roundsRepo();
       if (!round_id) {
-        const rounds = db
-          .prepare(
-            `
-          SELECT r.*, COUNT(DISTINCT i.id) AS images,
-            COUNT(DISTINCT CASE WHEN rc.state='missing' THEN rc.card_number END) AS missing_detected,
-            COUNT(DISTINCT CASE WHEN rc.confirmed=0 THEN rc.card_number END) AS pending_review
-          FROM capture_rounds r
-          LEFT JOIN capture_round_images i ON i.round_id=r.id
-          LEFT JOIN capture_round_cards rc ON rc.round_id=r.id
-          GROUP BY r.id ORDER BY r.created_at DESC LIMIT 20
-        `,
-          )
-          .all();
-        return textResult({ rounds });
+        return textResult({ rounds: repo.listRecent() });
       }
-      const round = getRound(round_id);
+      const round = repo.get(round_id);
       if (!round) return errorResult(`Ronda '${round_id}' no encontrada.`);
-      const cards = db
-        .prepare(
-          `
-        SELECT card_number AS number, state, quantity, confidence, confirmed, source
-        FROM capture_round_cards WHERE round_id=? ORDER BY card_number
-      `,
-        )
-        .all(round_id) as (Omit<RoundCardRow, "card_number"> & {
-        number: number;
-      })[];
-      const images = db
-        .prepare(
-          `
-        SELECT path, sha256, width, height, capture_order FROM capture_round_images
-        WHERE round_id=? ORDER BY capture_order
-      `,
-        )
-        .all(round_id);
+      const cards = repo.cards(round_id);
+      const images = repo.images(round_id);
       const validation = summarizeRoundValidation(
         round.expected_total,
         round.expected_owned_unique,
@@ -474,36 +371,18 @@ export function registerRoundTools(server: McpServer): void {
       if (!round) return errorResult(`Ronda '${round_id}' no encontrada.`);
       const editError = assertEditable(round);
       if (editError) return errorResult(editError);
-      const db = getDb();
       const owned = ownedRepo();
-      const writeAudit = db.prepare(`
-        INSERT INTO capture_round_cards
-          (round_id, card_number, state, quantity, confidence, confirmed, source, previous_quantity, applied_quantity, updated_at)
-        VALUES (@round_id, @card_number, @state, @quantity, 1, 1, @source, @previous_quantity, @applied_quantity, @updated_at)
-        ON CONFLICT(round_id, card_number) DO UPDATE SET
-          state=excluded.state, quantity=excluded.quantity, confirmed=1,
-          previous_quantity=excluded.previous_quantity, applied_quantity=excluded.applied_quantity,
-          updated_at=excluded.updated_at
-      `);
-      const finalizeTransaction = db.transaction(() => {
+      const repo = roundsRepo();
+      const plan = inImmediateTransaction(() => {
         // Read, plan and write under one immediate transaction. A separate MCP
         // process sharing PTCGP_DATA_DIR cannot change an owned quantity between
         // the `minimum`-mode preservation calculation and its corresponding write.
-        const observations = (
-          db
-            .prepare(
-              `
-            SELECT card_number, state, quantity, confidence, confirmed, source
-            FROM capture_round_cards WHERE round_id=? ORDER BY card_number
-          `,
-            )
-            .all(round_id) as RoundCardRow[]
-        ).map(toObservation);
+        const observations = repo.observations(round_id).map(toObservation);
         const numbers = expansionNumbers(round.expansion_id);
         const previousQuantities = owned.quantitiesByExpansion(
           round.expansion_id,
         );
-        const plan = planFinalize({
+        const result = planFinalize({
           expansion_id: round.expansion_id,
           expected_total: round.expected_total,
           quantity_mode: round.quantity_mode,
@@ -514,12 +393,12 @@ export function registerRoundTools(server: McpServer): void {
           expansion_numbers: numbers,
           previous_quantities: previousQuantities,
         });
-        if (!plan.ok) return plan;
+        if (!result.ok) return result;
 
         const now = new Date().toISOString();
-        for (const write of plan.writes) {
+        for (const write of result.writes) {
           owned.setQuantity(write.card_id, write.applied, now);
-          writeAudit.run({
+          repo.writeAudit({
             round_id,
             card_number: write.card_number,
             state: write.state,
@@ -532,20 +411,21 @@ export function registerRoundTools(server: McpServer): void {
         }
         const summary = JSON.stringify({
           total: round.expected_total,
-          owned_unique: plan.expected_owned_unique,
-          missing: plan.missing_count,
-          changed: plan.changed,
-          preserved_higher_quantities: plan.preserved_higher_quantities,
-          excluded_auto_detections: plan.excluded_auto_detections,
+          owned_unique: result.expected_owned_unique,
+          missing: result.missing_count,
+          changed: result.changed,
+          preserved_higher_quantities: result.preserved_higher_quantities,
+          excluded_auto_detections: result.excluded_auto_detections,
         });
-        db.prepare(
-          `
-          UPDATE capture_rounds SET status='applied', expected_owned_unique=?, updated_at=?, finalized_at=?, summary=? WHERE id=?
-          `,
-        ).run(plan.expected_owned_unique, now, now, summary, round_id);
-        return plan;
+        repo.markApplied({
+          round_id,
+          expected_owned_unique: result.expected_owned_unique,
+          updated_at: now,
+          finalized_at: now,
+          summary,
+        });
+        return result;
       });
-      const plan = finalizeTransaction.immediate();
       if (!plan.ok) return errorResult(plan.message);
       return textResult({
         round_id,
