@@ -1,4 +1,6 @@
+import { z } from "zod";
 import { getDb } from "./db.js";
+import { parseRemote } from "./remote-validation.js";
 
 const UA = "Mozilla/5.0 (compatible; ptcgp-mcp/1.0; personal collection tool)";
 const ENERGY: Record<string, string> = {
@@ -262,6 +264,16 @@ export interface MetaDeck {
   share: string;
 }
 
+// The meta table is scraped by regex; this locks the shape each parsed row must
+// keep so a silent layout change surfaces as a clear error instead of garbage.
+export const metaDeckSchema = z.object({
+  rank: z.number().int().min(1),
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  count: z.number().int().min(0),
+  share: z.string(),
+});
+
 export async function fetchMetaDecks(limit: number): Promise<MetaDeck[]> {
   const html = await fetchHtml(
     "https://play.limitlesstcg.com/decks?game=POCKET",
@@ -281,7 +293,12 @@ export async function fetchMetaDecks(limit: number): Promise<MetaDeck[]> {
     });
     if (decks.length >= limit) break;
   }
-  return decks;
+  if (!decks.length) {
+    throw new Error(
+      "No se reconoció ningún mazo en la página de Limitless; el formato de la página pudo cambiar.",
+    );
+  }
+  return parseRemote(z.array(metaDeckSchema), decks, "Limitless meta-decks");
 }
 
 export interface DeckCard {
@@ -289,6 +306,12 @@ export interface DeckCard {
   name: string;
   card_id: string | null;
 }
+
+export const deckCardSchema = z.object({
+  count: z.number().int().min(1),
+  name: z.string().min(1),
+  card_id: z.string().nullable(),
+});
 
 export async function fetchDecklist(
   slug: string,
@@ -338,8 +361,16 @@ export async function fetchDecklist(
     return cards;
   }
 
-  const pokemon = parseSection("Pokémon");
-  const trainers = parseSection("Trainer");
+  const pokemon = parseRemote(
+    z.array(deckCardSchema),
+    parseSection("Pokémon"),
+    "Limitless decklist (Pokémon)",
+  );
+  const trainers = parseRemote(
+    z.array(deckCardSchema),
+    parseSection("Trainer"),
+    "Limitless decklist (Trainer)",
+  );
   const cardCount = [...pokemon, ...trainers].reduce(
     (sum, card) => sum + card.count,
     0,

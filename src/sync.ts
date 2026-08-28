@@ -1,28 +1,42 @@
+import { z } from "zod";
 import { getDb } from "./db.js";
+import { parseRemote } from "./remote-validation.js";
 
 const CARDS_URL =
   "https://raw.githubusercontent.com/chase-mew/pokemon-tcg-pocket-cards/refs/heads/main/data/v4/cards.json";
 const EXPANSIONS_URL =
   "https://raw.githubusercontent.com/chase-mew/pokemon-tcg-pocket-cards/refs/heads/main/data/v4/expansions.json";
 
-interface RawCard {
-  id: string;
-  name: string;
-  rarity: string;
-  pack: string;
-  health: string;
-  image: string;
-  fullart: string;
-  ex: string;
-  artist: string;
-  type: string;
-}
+// Community dataset (chase-mew v4): every field arrives as a string. `id` and
+// `name` are essential; the rest are read defensively downstream, so they stay
+// optional here to tolerate a card that legitimately omits one without letting
+// a wholesale shape change (e.g. a non-array response) pass unnoticed.
+const rawCardSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  rarity: z.string(),
+  pack: z.string().optional(),
+  health: z.string().optional(),
+  image: z.string().optional(),
+  fullart: z.string().optional(),
+  ex: z.string().optional(),
+  artist: z.string().optional(),
+  type: z.string().optional(),
+});
+export const rawCardsSchema = z.array(rawCardSchema);
 
-interface RawExpansion {
-  id: string;
-  name: string;
-  packs: { id: string; name: string; image: string }[];
-}
+const rawExpansionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  packs: z.array(
+    z.object({
+      name: z.string(),
+      id: z.string().optional(),
+      image: z.string().optional(),
+    }),
+  ),
+});
+export const rawExpansionsSchema = z.array(rawExpansionSchema);
 
 export async function syncCatalog(): Promise<{
   cards: number;
@@ -38,8 +52,16 @@ export async function syncCatalog(): Promise<{
       `Descarga fallida: cards=${cardsRes.status} expansions=${expsRes.status}. Reintenta o revisa conectividad.`,
     );
   }
-  const cards = (await cardsRes.json()) as RawCard[];
-  const expansions = (await expsRes.json()) as RawExpansion[];
+  const cards = parseRemote(
+    rawCardsSchema,
+    await cardsRes.json(),
+    "cards.json",
+  );
+  const expansions = parseRemote(
+    rawExpansionsSchema,
+    await expsRes.json(),
+    "expansions.json",
+  );
   const expName = new Map(expansions.map((e) => [e.id, e.name]));
 
   const db = getDb();
@@ -134,6 +156,22 @@ interface TcgdexCard {
   weaknesses?: { type: string; value: string }[];
 }
 
+// TCGdex is more stable than the scrapers, so this only guards the structural
+// shape the enrichment relies on (scalars typed when present; the three lists
+// must be arrays). Elements stay `unknown`: they are re-serialized verbatim, so
+// they are validated as a gate but stored from the original untouched payload.
+const tcgdexCardSchema = z.object({
+  category: z.string().optional(),
+  stage: z.string().optional(),
+  evolveFrom: z.string().optional(),
+  suffix: z.string().optional(),
+  retreat: z.number().optional(),
+  effect: z.string().optional(),
+  attacks: z.array(z.unknown()).optional(),
+  abilities: z.array(z.unknown()).optional(),
+  weaknesses: z.array(z.unknown()).optional(),
+});
+
 export interface EnrichResult {
   enriched: number;
   skipped: number;
@@ -214,7 +252,9 @@ export async function enrichCards(
           errors++;
           continue;
         }
-        const c = (await res.json()) as TcgdexCard;
+        const payload: unknown = await res.json();
+        parseRemote(tcgdexCardSchema, payload, "TCGdex");
+        const c = payload as TcgdexCard;
         const maxDmg = Math.max(
           0,
           ...(c.attacks ?? []).map((a) => parseDamage(a.damage)),
