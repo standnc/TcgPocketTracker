@@ -36,10 +36,10 @@ The verified tool list is:
 
 ## Privacy and repository risks
 
-- This checkout has no `.git` directory. Therefore Git status, history, tracked-file checks, and a real diff are unavailable. The new `.gitignore` protects a future repository only; it cannot establish whether another copy already contains private files.
-- The working tree contains real processed screenshots. They remain untouched, but must stay out of any future repository, tarball, issue, or test fixture.
-- The live collection and a local backup are outside this checkout. They were not modified. SQLite paths and capture image paths may be stored in the local database, so do not publish database files or logs that include tool responses.
-- No application credentials, cookies, or API keys were found in the source files scanned. This is not a substitute for scanning the Git history once a repository is initialized or located.
+- This checkout is a Git repository on `main`. Its preparation commits are recorded in `HANDOFF.md`. Current tracked-file checks found no real database, backup, capture, log, or `.env` file: `.env.example` and `screenshots/*/.gitkeep` are intentional public placeholders only.
+- Any ignored real screenshot or capture must remain outside future tarballs, issues, test fixtures, and examples. Do not rely on `.gitignore` as permission to share it.
+- The live collection and local backups are outside this checkout and were not opened for writes during the audit. SQLite paths and capture image paths may be stored in the local database, so do not publish database files or logs that include tool responses.
+- No application credentials, cookies, or API keys were found in the source files scanned during the preparation audit. This is not a substitute for a full history and secret scan before making a remote public.
 - External catalog and deck sources need terms-of-use, attribution, stability, and redistribution review before a public release.
 
 ## Technical assessment

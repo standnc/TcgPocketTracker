@@ -8,14 +8,14 @@ This roadmap is ordered. Items are proposals, not functionality already delivere
 - Keep databases, WAL/SHM sidecars, backups, screenshots, `.env` files, logs, and temporary files excluded.
 - Choose a license and contributor/security policy with the maintainer.
 - Replace the remaining private-data verification dependency with a legal synthetic/consented OCR fixture corpus and document its limits.
-- Establish a supported Node LTS range and reproducible clean-install command.
+- Completed baseline: support Node 22 and 24, select Node 24 in `.nvmrc`, and verify clean installs on both versions.
 
 ## 2. Generic core
 
 - Extract collection and capture-round use cases from MCP tool adapters.
 - Add repository interfaces, backup-before-migrate, and migration-recovery tests around the existing versioned SQLite migration ledger.
 - Define a portable import/export format that excludes images and has explicit privacy controls.
-- Add structured, redacted stderr logging and error taxonomy.
+- Extend the current structured Pino stderr logging with redaction tests, correlation IDs, and a safe error taxonomy.
 
 ## 3. Installation ease and CLI
 
