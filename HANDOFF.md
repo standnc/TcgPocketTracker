@@ -37,8 +37,8 @@ Verified implementation properties:
 
 - OCR accuracy, screenshot coverage, and automatic capture completion are not proven by the public test corpus. Human review before a round is finalized is mandatory.
 - HEIC/HEIF is allow-listed in code but not supported by the audited Sharp build: its HEIF input suffix list contains only `.avif`. Do not claim iPhone HEIC support until a suitable build and legal fixture prove it.
-- Network-based catalog, enrichment, Limitless/meta-deck and decklist features are implementation-present but lack hermetic fixtures, contract tests, a completed source-rights decision, and rate-limit policy.
-- There is no backup/restore MCP tool, automatic backup before migration, downgrade path, CLI, Streamable HTTP transport, authentication layer, metrics, correlation IDs, or logging redaction policy.
+- Network-based catalog, enrichment, Limitless/meta-deck and decklist features are implementation-present. Their response shapes are now validated with Zod (a clear, source-labeled error on upstream drift; `src/remote-validation.ts`), but they still lack hermetic HTTP fixtures, a completed source-rights decision, and a rate-limit policy.
+- There is no backup/restore MCP tool, downgrade path, CLI, Streamable HTTP transport, authentication layer, metrics, correlation IDs, or logging redaction policy. A consistent backup is now written automatically before a migration runs against a database that already holds data (`VACUUM INTO <data_dir>/backups/collection-pre-migration-*.db`), but there is still no in-band restore tool: recovery is opening/copying that snapshot.
 - SQLite is the correct local single-user store today. It is not the chosen store for the future multi-user tracker; see `WEB_TRACKER_PLAN.md`.
 
 ## Technology baseline and commands
@@ -70,15 +70,19 @@ npm audit --omit=dev
 src/index.ts                 MCP server setup and stdio transport
 src/config.ts                validated environment configuration
 src/logger.ts                Pino stderr logger
-src/db.ts                    SQLite pragmas and migration runner
+src/db.ts                    SQLite pragmas, migration runner, pre-migration backup
+src/domain/rounds.ts         framework-free capture-round rules (functional core)
+src/domain/collection.ts     framework-free collection rules (number spec, quantity math)
+src/domain/errors.ts         shared domain-error type
+src/remote-validation.ts     Zod guard for untrusted remote responses
 src/tools/catalog.ts         catalog and remote-source MCP tools
-src/tools/collection.ts      collection MCP tools
-src/tools/rounds.ts          capture-round MCP tools
+src/tools/collection.ts      collection MCP tools (thin adapter over src/domain/collection.ts)
+src/tools/rounds.ts          capture-round MCP tools (thin adapter over src/domain/rounds.ts)
 src/tools/decks.ts           deck MCP tools
 src/screenshot-analyzer.ts   local normalization and OCR helper
-src/sync.ts                  catalog sync/enrichment support
-src/limitless.ts             deck/meta source support
-src/tests/*                  MCP, SQLite migration/round, image tests
+src/sync.ts                  catalog sync/enrichment support (Zod-validated responses)
+src/limitless.ts             deck/meta source support (Zod-validated responses)
+src/tests/*                  MCP, SQLite migration/round/backup, domain, remote, image tests
 src/scripts/smoke.ts         isolated stdio tool-list and SQLite smoke test
 ```
 
@@ -86,16 +90,18 @@ The desired direction is documented in `ARCHITECTURE.md`: MCP, a future CLI, and
 
 ## Recommended next phase: generic core
 
-The next agent should work only on roadmap phase 2, in this order:
+Phase 2 is partially done (2026-08-28). The framework-free rules now live in `src/domain/` (`rounds.ts`, `collection.ts`, `errors.ts`); the MCP tools are thin adapters over them; remote responses are Zod-validated (`src/remote-validation.ts`); and a consistent backup is taken before a data-bearing migration (`backupBeforeMigration` in `src/db.ts`). 33 tests pass; `npm run verify` and `npm audit --omit=dev` are clean.
 
-1. Add focused tests around the existing round finalization and collection mutation rules before moving logic.
-2. Extract a framework-free collection use-case module with typed inputs/results; leave existing MCP responses as an adapter layer.
-3. Extract capture-round validation/finalization with the same transaction semantics and idempotency behavior.
-4. Define a SQLite repository port and move direct SQL behind it incrementally.
-5. Add SQLite-aware backup-before-migrate and recovery tests using a temporary database only.
-6. Add redaction tests and a safe error taxonomy for logs.
+Status of the original ordered list:
 
-Acceptance criteria: all 17 tools keep their names and observed behavior, the existing six tests remain green, new tests cover the extracted use cases, and no live data directory is opened or changed.
+1. [done] Focused tests around round finalization and collection mutation rules.
+2. [done] Framework-free collection use-case module (`src/domain/collection.ts`).
+3. [done] Capture-round validation/finalization extracted (`src/domain/rounds.ts`), same transaction semantics.
+4. [ ] Define a SQLite repository port (Cards/Owned/Rounds) and move direct SQL behind it incrementally. The domain no longer depends on SQL, but the SQL still lives in the tool adapters, so this is now a mechanical, low-risk step.
+5. [done] SQLite-aware backup-before-migrate and recovery tests (`src/tests/backup.test.ts`, temporary DB only).
+6. [ ] Add a log-redaction policy and a safe error taxonomy, and start using the logger inside the tools.
+
+Acceptance criteria: all 17 tools keep their names and observed behavior, the six initial tests remain green, new tests cover the extracted use cases, and no live data directory is opened or changed. One deliberate exception to "observed behavior": `ptcgp_round_status` used to emit `validation.unconfirmed` as a list of `null` (it read `card.card_number` from rows aliased to `number`); the extraction returns the real card numbers instead, locked by a test.
 
 ## Explicit non-goals until approved
 

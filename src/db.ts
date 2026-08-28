@@ -43,7 +43,7 @@ export function getDb(): Database.Database {
   db.pragma("foreign_keys = ON");
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
-  runMigrations(db);
+  runMigrations(db, { backupDir: join(dir, "backups") });
   return db;
 }
 
@@ -160,8 +160,49 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 2, name: "battle_columns", apply: addBattleColumns },
 ];
 
-/** Applies forward-only, idempotent schema migrations and records each version. */
-export function runMigrations(database: Database.Database): void {
+function tableExists(database: Database.Database, name: string): boolean {
+  return (
+    database
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
+      .get(name) !== undefined
+  );
+}
+
+/**
+ * Writes a consistent snapshot of the live database before a migration mutates
+ * it. Uses `VACUUM INTO` (not a raw file copy) so WAL-resident, not-yet
+ * checkpointed pages are included and the result is a single, self-consistent
+ * file. A failure here aborts the migration on purpose: we never migrate
+ * without a recoverable copy.
+ */
+export function backupBeforeMigration(
+  database: Database.Database,
+  backupDir: string,
+): string {
+  mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const destination = join(backupDir, `collection-pre-migration-${stamp}.db`);
+  try {
+    database.exec(`VACUUM INTO '${destination.replace(/'/g, "''")}'`);
+  } catch (error) {
+    throw new Error(
+      `No se pudo crear la copia de seguridad previa a la migración en ${destination}: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  return destination;
+}
+
+/**
+ * Applies forward-only, idempotent schema migrations and records each version.
+ * When `options.backupDir` is set and pending migrations must run against a
+ * database that already holds data, a consistent backup is written first.
+ */
+export function runMigrations(
+  database: Database.Database,
+  options: { backupDir?: string } = {},
+): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
@@ -176,12 +217,20 @@ export function runMigrations(database: Database.Database): void {
       }[]
     ).map((row) => row.version),
   );
+  const pending = MIGRATIONS.filter(
+    (migration) => !applied.has(migration.version),
+  );
+
+  // Skip the backup on a brand-new database (no `cards` table yet): the initial
+  // migration only creates schema, so there is nothing to recover.
+  if (pending.length && options.backupDir && tableExists(database, "cards")) {
+    backupBeforeMigration(database, options.backupDir);
+  }
+
   const record = database.prepare(
     "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
   );
-
-  for (const migration of MIGRATIONS) {
-    if (applied.has(migration.version)) continue;
+  for (const migration of pending) {
     database.transaction(() => {
       migration.apply(database);
       record.run(migration.version, migration.name, new Date().toISOString());

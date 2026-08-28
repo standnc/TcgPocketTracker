@@ -13,14 +13,16 @@ Fases ordenadas por prioridad, tal como se acordó para esta preparación open s
 
 ## Fase 2 — Núcleo genérico
 
-- [ ] Extraer casos de uso framework-free para rondas de captura, empezando por la lógica ya cubierta por tests en `src/tools/rounds.ts`.
-- [ ] Extraer casos de uso para mutaciones de colección (`setQty`/`parseNumbers`), eliminando la triplicación actual entre `set_card_quantity`, `bulk_update_collection` y `mark_range`.
-- [ ] Definir un puerto de repositorio SQLite y mover el SQL directo detrás de él de forma incremental.
-- [ ] Añadir copia de seguridad automática antes de aplicar una migración, más un test de recuperación sobre una base temporal.
-- [ ] Validar con Zod la forma de las respuestas de red en `src/sync.ts` y `src/limitless.ts`, para fallar con un error claro en vez de romper silenciosamente ante un cambio de esquema upstream.
+Parcialmente completada (2026-08-28): rondas y mutaciones de colección extraídas a `src/domain/`, validación Zod de respuestas de red y copia de seguridad previa a migración. Quedan el puerto de repositorio SQLite y la política de redacción de logs.
+
+- [x] Extraer casos de uso framework-free para rondas de captura, empezando por la lógica ya cubierta por tests en `src/tools/rounds.ts`. → `src/domain/rounds.ts` (functional core: `planFinalize`, `planRecord`, `classifyDetections`, `summarizeRoundValidation`, `validateRoundStart`); el handler MCP queda como shell fino de I/O.
+- [x] Extraer casos de uso para mutaciones de colección (`setQty`/`parseNumbers`), eliminando la triplicación actual entre `set_card_quantity`, `bulk_update_collection` y `mark_range`. → `src/domain/collection.ts` (`parseNumbers`, `computeQuantity`).
+- [ ] Definir un puerto de repositorio SQLite y mover el SQL directo detrás de él de forma incremental. (Siguiente paso: el SQL sigue en los adaptadores; el dominio ya no depende de él.)
+- [x] Añadir copia de seguridad automática antes de aplicar una migración, más un test de recuperación sobre una base temporal. → `backupBeforeMigration` en `src/db.ts` (`VACUUM INTO` consistente a `<data_dir>/backups/`, solo si hay migraciones pendientes sobre una base con datos); test en `src/tests/backup.test.ts`.
+- [x] Validar con Zod la forma de las respuestas de red en `src/sync.ts` y `src/limitless.ts`, para fallar con un error claro en vez de romper silenciosamente ante un cambio de esquema upstream. → helper `src/remote-validation.ts` + esquemas en ambos módulos; test en `src/tests/remote-validation.test.ts`.
 - [ ] Definir una política de redacción de logs y empezar a usar el logger dentro de las tools (hoy solo se usa en el arranque del proceso).
 
-Criterio de aceptación de esta fase: las 17 tools mantienen su nombre y comportamiento observable, los 6 tests actuales siguen en verde, y cada caso de uso extraído añade sus propios tests sin abrir nunca un directorio de datos real.
+Criterio de aceptación de esta fase: las 17 tools mantienen su nombre y comportamiento observable, los 6 tests iniciales siguen en verde, y cada caso de uso extraído añade sus propios tests sin abrir nunca un directorio de datos real. Estado 2026-08-28: 33 tests en verde (los 6 iniciales + 27 nuevos), `npm run verify` y `npm audit --omit=dev` limpios. Única desviación deliberada de "comportamiento observable": `ptcgp_round_status` devolvía `validation.unconfirmed` como lista de `null` (leía `card.card_number` sobre filas aliaseadas a `number`); la extracción lo corrige para devolver los números reales, con test que lo fija.
 
 ## Fase 3 — Facilidad de instalación y CLI
 
