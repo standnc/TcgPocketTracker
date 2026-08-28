@@ -3,14 +3,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { analyzeScreenshots } from "../screenshot-analyzer.js";
 import {
-  catalogIsEmpty,
   EMPTY_CATALOG_MSG,
-  getDb,
   inTransaction,
   inImmediateTransaction,
 } from "../db.js";
 import { parseNumbers } from "../domain/collection.js";
 import { ownedRepo } from "../repositories/owned.js";
+import { cardsRepo } from "../repositories/cards.js";
 import {
   roundsRepo,
   type RoundRow,
@@ -52,13 +51,7 @@ function assertEditable(round: RoundRow): string | null {
 }
 
 function expansionNumbers(expansion: string): number[] {
-  return (
-    getDb()
-      .prepare(
-        "SELECT number FROM cards WHERE expansion_id = ? ORDER BY number",
-      )
-      .all(expansion) as { number: number }[]
-  ).map((row) => row.number);
+  return cardsRepo().numbersInExpansion(expansion);
 }
 
 function parseSpec(spec: string | undefined, label: string): number[] {
@@ -109,7 +102,7 @@ export function registerRoundTools(server: McpServer): void {
       },
     },
     async ({ expansion, expected_owned_unique, quantity_mode, label }) => {
-      if (catalogIsEmpty()) return errorResult(EMPTY_CATALOG_MSG);
+      if (cardsRepo().isEmpty()) return errorResult(EMPTY_CATALOG_MSG);
       const exp = expansion.toLowerCase();
       const numbers = expansionNumbers(exp);
       if (!numbers.length)

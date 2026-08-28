@@ -1,26 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  getDb,
-  inTransaction,
-  catalogIsEmpty,
-  EMPTY_CATALOG_MSG,
-  resolveRarity,
-} from "../db.js";
+import { inTransaction, EMPTY_CATALOG_MSG, resolveRarity } from "../db.js";
 import { computeQuantity, parseNumbers } from "../domain/collection.js";
 import { ownedRepo } from "../repositories/owned.js";
+import { cardsRepo } from "../repositories/cards.js";
 
 function setQty(
   cardId: string,
   quantity: number,
   mode: "set" | "add",
 ): { ok: boolean; error?: string; final?: number } {
-  // Card existence is still read inline here; it moves behind CardsRepository in
-  // the catalog-read extraction step.
-  const card = getDb()
-    .prepare("SELECT id FROM cards WHERE id = ?")
-    .get(cardId) as { id: string } | undefined;
-  if (!card)
+  if (!cardsRepo().exists(cardId))
     return { ok: false, error: `Carta '${cardId}' no existe en el catálogo` };
   const owned = ownedRepo();
   const applied = computeQuantity(owned.getQuantity(cardId), quantity, mode);
@@ -43,59 +33,21 @@ export function registerCollectionTools(server: McpServer): void {
       },
     },
     async () => {
-      if (catalogIsEmpty())
+      const repo = cardsRepo();
+      if (repo.isEmpty())
         return {
           content: [{ type: "text", text: EMPTY_CATALOG_MSG }],
           isError: true,
         };
-      const db = getDb();
-      const global = db
-        .prepare(
-          `
-        SELECT COUNT(c.id) AS total,
-          SUM(CASE WHEN COALESCE(o.quantity,0) > 0 THEN 1 ELSE 0 END) AS owned_unique,
-          SUM(COALESCE(o.quantity,0)) AS total_copies
-        FROM cards c LEFT JOIN owned o ON o.card_id = c.id
-      `,
-        )
-        .get() as { total: number; owned_unique: number; total_copies: number };
-      const byExp = db
-        .prepare(
-          `
-        SELECT c.expansion_id AS id, c.expansion_name AS name, COUNT(c.id) AS total,
-          SUM(CASE WHEN COALESCE(o.quantity,0) > 0 THEN 1 ELSE 0 END) AS owned_unique
-        FROM cards c LEFT JOIN owned o ON o.card_id = c.id
-        GROUP BY c.expansion_id ORDER BY c.expansion_id
-      `,
-        )
-        .all() as {
-        id: string;
-        name: string;
-        total: number;
-        owned_unique: number;
-      }[];
-      const byRarity = db
-        .prepare(
-          `
-        SELECT c.rarity, COUNT(c.id) AS total,
-          SUM(CASE WHEN COALESCE(o.quantity,0) > 0 THEN 1 ELSE 0 END) AS owned_unique
-        FROM cards c LEFT JOIN owned o ON o.card_id = c.id
-        GROUP BY c.rarity ORDER BY total DESC
-      `,
-        )
-        .all() as { rarity: string; total: number; owned_unique: number }[];
-      const lastSync = db
-        .prepare("SELECT value FROM meta WHERE key = 'last_sync'")
-        .get() as { value: string } | undefined;
-
+      const { global, byExpansion, byRarity } = repo.stats();
       const output = {
         owned_unique: global.owned_unique ?? 0,
         catalog_total: global.total,
         completion_pct:
           Math.round(((global.owned_unique ?? 0) / global.total) * 1000) / 10,
         total_copies: global.total_copies ?? 0,
-        catalog_last_sync: lastSync?.value ?? null,
-        by_expansion: byExp.map((e) => ({
+        catalog_last_sync: repo.lastSync(),
+        by_expansion: byExpansion.map((e) => ({
           ...e,
           completion_pct: Math.round((e.owned_unique / e.total) * 1000) / 10,
         })),
@@ -142,20 +94,13 @@ Devuelve { packs: [{pack, expansion, missing_count, total_in_pack, missing: [{id
       },
     },
     async (p) => {
-      if (catalogIsEmpty())
+      const repo = cardsRepo();
+      if (repo.isEmpty())
         return {
           content: [{ type: "text", text: EMPTY_CATALOG_MSG }],
           isError: true,
         };
-      const where: string[] = [
-        "COALESCE(o.quantity,0) = 0",
-        "c.pack IS NOT NULL",
-      ];
-      const args: Record<string, unknown> = {};
-      if (p.expansion) {
-        where.push("c.expansion_id = @exp");
-        args.exp = p.expansion.toLowerCase();
-      }
+      let rarities: string[] | undefined;
       if (p.max_rarity) {
         const order = ["◊", "◊◊", "◊◊◊", "◊◊◊◊", "☆", "☆☆", "☆☆☆", "♕"];
         const r = resolveRarity(p.max_rarity);
@@ -170,38 +115,12 @@ Devuelve { packs: [{pack, expansion, missing_count, total_in_pack, missing: [{id
             isError: true,
           };
         }
-        const allowed = order.slice(0, order.indexOf(r) + 1);
-        where.push(
-          `c.rarity IN (${allowed.map((_, i) => `@r${i}`).join(",")})`,
-        );
-        allowed.forEach((v, i) => {
-          args[`r${i}`] = v;
-        });
+        rarities = order.slice(0, order.indexOf(r) + 1);
       }
-      const rows = getDb()
-        .prepare(
-          `
-        SELECT c.id, c.name, c.rarity, c.pack, c.expansion_id
-        FROM cards c LEFT JOIN owned o ON o.card_id = c.id
-        WHERE ${where.join(" AND ")}
-        ORDER BY c.expansion_id, c.number
-      `,
-        )
-        .all(args) as {
-        id: string;
-        name: string;
-        rarity: string;
-        pack: string;
-        expansion_id: string;
-      }[];
-
-      const totals = getDb()
-        .prepare(
-          `
-        SELECT pack, expansion_id, COUNT(*) AS n FROM cards WHERE pack IS NOT NULL GROUP BY pack, expansion_id
-      `,
-        )
-        .all() as { pack: string; expansion_id: string; n: number }[];
+      const { rows, totals } = repo.missing({
+        expansion: p.expansion?.toLowerCase(),
+        rarities,
+      });
       const totalMap = new Map(
         totals.map((t) => [`${t.expansion_id}|${t.pack}`, t.n]),
       );
@@ -354,13 +273,7 @@ Devuelve { packs: [{pack, expansion, missing_count, total_in_pack, missing: [{id
         };
       }
       const exp = expansion.toLowerCase();
-      const existing = new Set(
-        (
-          getDb()
-            .prepare("SELECT number FROM cards WHERE expansion_id = ?")
-            .all(exp) as { number: number }[]
-        ).map((r) => r.number),
-      );
+      const existing = new Set(cardsRepo().numbersInExpansion(exp));
       if (existing.size === 0) {
         return {
           content: [

@@ -334,12 +334,5 @@ export function cardWithQty(
   return base;
 }
 
-export function catalogIsEmpty(): boolean {
-  const n = getDb().prepare("SELECT COUNT(*) AS n FROM cards").get() as {
-    n: number;
-  };
-  return n.n === 0;
-}
-
 export const EMPTY_CATALOG_MSG =
   "El catálogo está vacío. Ejecuta el tool ptcgp_sync_catalog (o `npm run sync`) para descargarlo.";

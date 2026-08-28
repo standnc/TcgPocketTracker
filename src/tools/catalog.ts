@@ -1,20 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  getDb,
-  resolveRarity,
-  cardWithQty,
-  catalogIsEmpty,
-  EMPTY_CATALOG_MSG,
-  type CardRow,
-} from "../db.js";
+import { resolveRarity, cardWithQty, EMPTY_CATALOG_MSG } from "../db.js";
+import { cardsRepo } from "../repositories/cards.js";
 import { syncCatalog, enrichCards } from "../sync.js";
 import { enrichFromLimitless } from "../limitless.js";
-
-const BASE_SELECT = `
-  SELECT c.*, COALESCE(o.quantity, 0) AS quantity
-  FROM cards c LEFT JOIN owned o ON o.card_id = c.id
-`;
 
 export function registerCatalogTools(server: McpServer): void {
   server.registerTool(
@@ -94,25 +83,13 @@ Ejemplos: "atacantes de fuego para mi mazo que ya tenga" -> type="Fire", min_dam
       },
     },
     async (p) => {
-      if (catalogIsEmpty())
+      const repo = cardsRepo();
+      if (repo.isEmpty())
         return {
           content: [{ type: "text", text: EMPTY_CATALOG_MSG }],
           isError: true,
         };
-      const where: string[] = [];
-      const args: Record<string, unknown> = {};
-      if (p.query) {
-        where.push("c.name LIKE @q");
-        args.q = `%${p.query}%`;
-      }
-      if (p.expansion) {
-        where.push("c.expansion_id = @exp");
-        args.exp = p.expansion.toLowerCase();
-      }
-      if (p.pack) {
-        where.push("c.pack LIKE @pack");
-        args.pack = `%${p.pack}%`;
-      }
+      let rarity: string | undefined;
       if (p.rarity) {
         const r = resolveRarity(p.rarity);
         if (!r)
@@ -125,67 +102,31 @@ Ejemplos: "atacantes de fuego para mi mazo que ya tenga" -> type="Fire", min_dam
             ],
             isError: true,
           };
-        where.push("c.rarity = @rar");
-        args.rar = r;
+        rarity = r;
       }
-      if (p.type) {
-        where.push("LOWER(c.type) = LOWER(@type)");
-        args.type = p.type;
-      }
-      if (p.category) {
-        where.push("c.category = @cat");
-        args.cat = p.category;
-      }
-      if (p.stage) {
-        where.push("c.stage = @stage");
-        args.stage = p.stage;
-      }
-      if (p.min_damage) {
-        where.push("c.max_damage >= @mindmg");
-        args.mindmg = p.min_damage;
-      }
-      if (p.has_ability !== undefined) {
-        where.push(
-          p.has_ability ? "c.abilities IS NOT NULL" : "c.abilities IS NULL",
-        );
-      }
-      if (p.text_search) {
-        where.push(
-          "(c.attacks LIKE @ts OR c.abilities LIKE @ts OR c.effect LIKE @ts)",
-        );
-        args.ts = `%${p.text_search}%`;
-      }
-      if (p.ex !== undefined) {
-        where.push("c.is_ex = @ex");
-        args.ex = p.ex ? 1 : 0;
-      }
-      if (p.owned_filter === "owned") where.push("COALESCE(o.quantity,0) > 0");
-      if (p.owned_filter === "missing")
-        where.push("COALESCE(o.quantity,0) = 0");
-      if (p.owned_filter === "duplicates")
-        where.push("COALESCE(o.quantity,0) > 1");
-
-      const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-      const db = getDb();
-      const total = (
-        db
-          .prepare(
-            `SELECT COUNT(*) AS n FROM cards c LEFT JOIN owned o ON o.card_id = c.id ${whereSql}`,
-          )
-          .get(args) as { n: number }
-      ).n;
-      const rows = db
-        .prepare(
-          `${BASE_SELECT} ${whereSql} ORDER BY c.expansion_id, c.number LIMIT @limit OFFSET @offset`,
-        )
-        .all({ ...args, limit: p.limit, offset: p.offset }) as CardRow[];
+      const { total, cards } = repo.search({
+        query: p.query,
+        text_search: p.text_search,
+        expansion: p.expansion?.toLowerCase(),
+        pack: p.pack,
+        rarity,
+        type: p.type,
+        category: p.category,
+        stage: p.stage,
+        min_damage: p.min_damage,
+        has_ability: p.has_ability,
+        owned_filter: p.owned_filter,
+        ex: p.ex,
+        limit: p.limit,
+        offset: p.offset,
+      });
 
       const output = {
         total,
-        count: rows.length,
+        count: cards.length,
         offset: p.offset,
-        has_more: total > p.offset + rows.length,
-        cards: rows.map((r) => cardWithQty(r)),
+        has_more: total > p.offset + cards.length,
+        cards: cards.map((r) => cardWithQty(r)),
       };
       return {
         content: [{ type: "text", text: JSON.stringify(output) }],
@@ -213,9 +154,7 @@ Ejemplos: "atacantes de fuego para mi mazo que ya tenga" -> type="Fire", min_dam
       },
     },
     async ({ card_id }) => {
-      const row = getDb()
-        .prepare(`${BASE_SELECT} WHERE c.id = ?`)
-        .get(card_id.toLowerCase()) as CardRow | undefined;
+      const row = cardsRepo().findById(card_id.toLowerCase());
       if (!row) {
         return {
           content: [
@@ -266,7 +205,7 @@ Ejemplos: "atacantes de fuego para mi mazo que ya tenga" -> type="Fire", min_dam
       },
     },
     async (p) => {
-      if (catalogIsEmpty())
+      if (cardsRepo().isEmpty())
         return {
           content: [{ type: "text", text: EMPTY_CATALOG_MSG }],
           isError: true,
@@ -327,30 +266,13 @@ Ejemplos: "atacantes de fuego para mi mazo que ya tenga" -> type="Fire", min_dam
       },
     },
     async () => {
-      if (catalogIsEmpty())
+      const repo = cardsRepo();
+      if (repo.isEmpty())
         return {
           content: [{ type: "text", text: EMPTY_CATALOG_MSG }],
           isError: true,
         };
-      const rows = getDb()
-        .prepare(
-          `
-        SELECT e.id, e.name, e.packs,
-          COUNT(c.id) AS total,
-          SUM(CASE WHEN COALESCE(o.quantity,0) > 0 THEN 1 ELSE 0 END) AS owned_unique
-        FROM expansions e
-        JOIN cards c ON c.expansion_id = e.id
-        LEFT JOIN owned o ON o.card_id = c.id
-        GROUP BY e.id ORDER BY e.id
-      `,
-        )
-        .all() as {
-        id: string;
-        name: string;
-        packs: string;
-        total: number;
-        owned_unique: number;
-      }[];
+      const rows = repo.expansionProgress();
       const output = {
         expansions: rows.map((r) => ({
           id: r.id,
