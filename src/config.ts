@@ -9,6 +9,9 @@ const environmentSchema = z
       .trim()
       .min(1, "PTCGP_DATA_DIR no puede estar vacío")
       .optional(),
+    PTCGP_LOG_LEVEL: z
+      .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
+      .optional(),
   })
   .passthrough();
 
@@ -27,6 +30,17 @@ export function resolveDataDir(env: NodeJS.ProcessEnv = process.env): string {
     parsed.data.PTCGP_DATA_DIR ??
       join(homedir(), ".local", "share", "ptcgp-mcp"),
   );
+}
+
+export function resolveLogLevel(
+  env: NodeJS.ProcessEnv = process.env,
+): z.infer<typeof environmentSchema>["PTCGP_LOG_LEVEL"] {
+  const parsed = environmentSchema.safeParse(env);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]?.message ?? "configuración inválida";
+    throw new Error(`Configuración inválida: ${issue}.`);
+  }
+  return parsed.data.PTCGP_LOG_LEVEL ?? "info";
 }
 
 export function dataDir(): string {

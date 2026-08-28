@@ -6,7 +6,7 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { resolveDataDir } from "../config.js";
+import { resolveDataDir, resolveLogLevel } from "../config.js";
 import { runMigrations } from "../db.js";
 
 function parseToolText(result: unknown): Record<string, unknown> {
@@ -101,6 +101,11 @@ test("la configuración rechaza un directorio de datos vacío y normaliza rutas"
   assert.equal(
     resolveDataDir({ PTCGP_DATA_DIR: "temporary-data" }),
     resolve("temporary-data"),
+  );
+  assert.equal(resolveLogLevel({}), "info");
+  assert.throws(
+    () => resolveLogLevel({ PTCGP_LOG_LEVEL: "verbose" }),
+    /Configuración inválida/,
   );
 });
 

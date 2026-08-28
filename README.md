@@ -16,7 +16,7 @@ This is a preparation-stage project, not a published package. Keep personal data
 
 ## Development setup
 
-Use Node.js 22.23.2 for this checked-out installation: its installed `better-sqlite3` native binding was built for Node 22. Node 24 is the current LTS line and a target for the public project, but this audit verified that the existing dependency tree cannot start on local Node 24.15.0 until dependencies are installed or rebuilt under that runtime. Add a clean Node 24 CI/install test before publication.
+Node 24 is the preferred development runtime (`.nvmrc`); Node 22 remains supported and covered by CI for compatibility. A clean install and full suite have been verified on Node 22 and Node 24. Run `npm ci` after changing Node versions because `better-sqlite3` is a native dependency and must be installed for that runtime.
 
 ```bash
 npm ci
@@ -25,7 +25,7 @@ npm test
 npm run smoke
 ```
 
-`npm test` builds TypeScript and runs the current SQLite/MCP and synthetic-image tests. `npm run smoke` starts the compiled stdio server in a fresh temporary data directory, lists its tools, and runs `PRAGMA quick_check` on that temporary database.
+`npm test` builds TypeScript and runs the current SQLite/MCP and synthetic-image tests. `npm run smoke` starts the compiled stdio server in a fresh temporary data directory, lists its tools, and runs `PRAGMA quick_check` on that temporary database. `npm run verify` additionally checks formatting, linting and the package contents without publishing anything.
 
 To build only:
 
@@ -48,6 +48,8 @@ Build first, choose a private data directory, then configure any MCP-compatible 
 ```
 
 The server uses stdout for MCP messages. Do not add normal logging to stdout.
+
+Set `PTCGP_LOG_LEVEL` to `fatal`, `error`, `warn`, `info` (default), `debug`, `trace`, or `silent` when diagnostics are needed. Logs are structured JSON written to stderr; do not put captures, credentials, tokens or full tool payloads into logs.
 
 ## MCP tools
 

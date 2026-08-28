@@ -26,26 +26,28 @@
     "format:write": "prettier --write .",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "smoke": "npm run build && node dist/scripts/smoke.js",
-    "verify": "npm run format && npm run lint && npm run test && npm run smoke",
+    "pack:check": "npm pack --dry-run",
+    "verify": "npm run format && npm run lint && npm run test && npm run smoke && npm run pack:check",
     "start": "node dist/index.js",
     "sync": "node dist/scripts/sync-catalog.js",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@tesseract.js-data/eng": "^1.0.0",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
+    "pino": "^10.3.1",
     "sharp": "^0.35.4",
     "tesseract.js": "^6.0.1",
-    "zod": "^3.24.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.12",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.13.3",
     "eslint": "^10.9.1",
     "prettier": "^3.9.6",
-    "typescript": "^5.7.0",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0"
   }
 }

@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getDb } from "./db.js";
+import { logger } from "./logger.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerCollectionTools } from "./tools/collection.js";
 import { registerDeckTools } from "./tools/decks.js";
@@ -21,10 +22,10 @@ registerRoundTools(server);
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("ptcgp-mcp-server listo (stdio)");
+  logger.info({ transport: "stdio", version: "1.1.0" }, "MCP server ready");
 }
 
-main().catch((err) => {
-  console.error("Error fatal:", err);
+main().catch((error) => {
+  logger.fatal({ err: error }, "MCP server failed to start");
   process.exit(1);
 });
