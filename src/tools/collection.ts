@@ -6,6 +6,7 @@ import {
   EMPTY_CATALOG_MSG,
   resolveRarity,
 } from "../db.js";
+import { computeQuantity, parseNumbers } from "../domain/collection.js";
 
 function setQty(
   cardId: string,
@@ -17,52 +18,20 @@ function setQty(
     { id: string } | undefined;
   if (!card)
     return { ok: false, error: `Carta '${cardId}' no existe en el catálogo` };
+  const current =
+    (
+      db.prepare("SELECT quantity FROM owned WHERE card_id = ?").get(cardId) as
+        { quantity: number } | undefined
+    )?.quantity ?? 0;
+  const applied = computeQuantity(current, quantity, mode);
   const now = new Date().toISOString();
-  if (mode === "add") {
-    db.prepare(
-      `
-      INSERT INTO owned (card_id, quantity, updated_at) VALUES (@card_id, MAX(@delta, 0), @updated_at)
-      ON CONFLICT(card_id) DO UPDATE SET
-        quantity = MAX(owned.quantity + @delta, 0),
-        updated_at = @updated_at
-    `,
-    ).run({ card_id: cardId, delta: quantity, updated_at: now });
-  } else {
-    db.prepare(
-      `
+  db.prepare(
+    `
       INSERT INTO owned (card_id, quantity, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(card_id) DO UPDATE SET quantity = excluded.quantity, updated_at = excluded.updated_at
     `,
-    ).run(cardId, Math.max(quantity, 0), now);
-  }
-  const final = (
-    db.prepare("SELECT quantity FROM owned WHERE card_id = ?").get(cardId) as {
-      quantity: number;
-    }
-  ).quantity;
-  return { ok: true, final };
-}
-
-export function parseNumbers(spec: string): number[] {
-  const out = new Set<number>();
-  for (const part of spec.split(",")) {
-    const t = part.trim();
-    if (!t) continue;
-    const range = t.match(/^(\d+)\s*-\s*(\d+)$/);
-    if (range) {
-      const a = parseInt(range[1], 10),
-        b = parseInt(range[2], 10);
-      if (a > b || b - a > 500) throw new Error(`Rango inválido: '${t}'`);
-      for (let i = a; i <= b; i++) out.add(i);
-    } else if (/^\d+$/.test(t)) {
-      out.add(parseInt(t, 10));
-    } else {
-      throw new Error(
-        `Token inválido: '${t}'. Usa números y rangos: "1,3,7-15"`,
-      );
-    }
-  }
-  return [...out].sort((a, b) => a - b);
+  ).run(cardId, applied, now);
+  return { ok: true, final: applied };
 }
 
 export function registerCollectionTools(server: McpServer): void {

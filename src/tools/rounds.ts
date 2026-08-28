@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { analyzeScreenshots } from "../screenshot-analyzer.js";
 import { catalogIsEmpty, EMPTY_CATALOG_MSG, getDb } from "../db.js";
-import { parseNumbers } from "./collection.js";
+import { parseNumbers } from "../domain/collection.js";
 import {
   classifyDetections,
   planFinalize,
