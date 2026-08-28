@@ -1,0 +1,42 @@
+# Dependencies and generated build output
+node_modules/
+dist/
+coverage/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Mutable SQLite data, including WAL sidecars and manual backups
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+backups/
+backup/
+data/
+
+# Personal captures and any derived OCR input
+screenshots/**
+!screenshots/inbox/
+!screenshots/inbox/.gitkeep
+!screenshots/processed/
+!screenshots/processed/.gitkeep
+captures/
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# Local tooling
+.DS_Store
+*.swp
