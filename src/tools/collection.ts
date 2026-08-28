@@ -2,35 +2,29 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   getDb,
+  inTransaction,
   catalogIsEmpty,
   EMPTY_CATALOG_MSG,
   resolveRarity,
 } from "../db.js";
 import { computeQuantity, parseNumbers } from "../domain/collection.js";
+import { ownedRepo } from "../repositories/owned.js";
 
 function setQty(
   cardId: string,
   quantity: number,
   mode: "set" | "add",
 ): { ok: boolean; error?: string; final?: number } {
-  const db = getDb();
-  const card = db.prepare("SELECT id FROM cards WHERE id = ?").get(cardId) as
-    { id: string } | undefined;
+  // Card existence is still read inline here; it moves behind CardsRepository in
+  // the catalog-read extraction step.
+  const card = getDb()
+    .prepare("SELECT id FROM cards WHERE id = ?")
+    .get(cardId) as { id: string } | undefined;
   if (!card)
     return { ok: false, error: `Carta '${cardId}' no existe en el catálogo` };
-  const current =
-    (
-      db.prepare("SELECT quantity FROM owned WHERE card_id = ?").get(cardId) as
-        { quantity: number } | undefined
-    )?.quantity ?? 0;
-  const applied = computeQuantity(current, quantity, mode);
-  const now = new Date().toISOString();
-  db.prepare(
-    `
-      INSERT INTO owned (card_id, quantity, updated_at) VALUES (?, ?, ?)
-      ON CONFLICT(card_id) DO UPDATE SET quantity = excluded.quantity, updated_at = excluded.updated_at
-    `,
-  ).run(cardId, applied, now);
+  const owned = ownedRepo();
+  const applied = computeQuantity(owned.getQuantity(cardId), quantity, mode);
+  owned.setQuantity(cardId, applied, new Date().toISOString());
   return { ok: true, final: applied };
 }
 
@@ -310,13 +304,13 @@ Devuelve { packs: [{pack, expansion, missing_count, total_in_pack, missing: [{id
     async ({ items, mode }) => {
       const errors: string[] = [];
       let updated = 0;
-      getDb().transaction(() => {
+      inTransaction(() => {
         for (const it of items) {
           const r = setQty(it.card_id.toLowerCase(), it.quantity, mode);
           if (r.ok) updated++;
           else errors.push(r.error!);
         }
-      })();
+      });
       const output = { updated, errors };
       return {
         content: [{ type: "text", text: JSON.stringify(output) }],
@@ -380,7 +374,7 @@ Devuelve { packs: [{pack, expansion, missing_count, total_in_pack, missing: [{id
       }
       const errors: string[] = [];
       let updated = 0;
-      getDb().transaction(() => {
+      inTransaction(() => {
         for (const n of nums) {
           if (!existing.has(n)) {
             errors.push(`${exp}-${n} no existe`);
@@ -391,7 +385,7 @@ Devuelve { packs: [{pack, expansion, missing_count, total_in_pack, missing: [{id
           if (r.ok) updated++;
           else errors.push(r.error!);
         }
-      })();
+      });
       const output = { expansion: exp, updated, errors };
       return {
         content: [{ type: "text", text: JSON.stringify(output) }],

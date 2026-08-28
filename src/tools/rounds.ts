@@ -4,6 +4,7 @@ import { z } from "zod";
 import { analyzeScreenshots } from "../screenshot-analyzer.js";
 import { catalogIsEmpty, EMPTY_CATALOG_MSG, getDb } from "../db.js";
 import { parseNumbers } from "../domain/collection.js";
+import { ownedRepo } from "../repositories/owned.js";
 import {
   classifyDetections,
   planFinalize,
@@ -474,10 +475,7 @@ export function registerRoundTools(server: McpServer): void {
       const editError = assertEditable(round);
       if (editError) return errorResult(editError);
       const db = getDb();
-      const writeOwned = db.prepare(`
-        INSERT INTO owned (card_id, quantity, updated_at) VALUES (?, ?, ?)
-        ON CONFLICT(card_id) DO UPDATE SET quantity=excluded.quantity, updated_at=excluded.updated_at
-      `);
+      const owned = ownedRepo();
       const writeAudit = db.prepare(`
         INSERT INTO capture_round_cards
           (round_id, card_number, state, quantity, confidence, confirmed, source, previous_quantity, applied_quantity, updated_at)
@@ -502,20 +500,8 @@ export function registerRoundTools(server: McpServer): void {
             .all(round_id) as RoundCardRow[]
         ).map(toObservation);
         const numbers = expansionNumbers(round.expansion_id);
-        const previousQuantities = new Map<number, number>(
-          (
-            db
-              .prepare(
-                `
-                SELECT c.number AS number, COALESCE(o.quantity,0) AS quantity FROM cards c
-                LEFT JOIN owned o ON o.card_id=c.id WHERE c.expansion_id=?
-              `,
-              )
-              .all(round.expansion_id) as {
-              number: number;
-              quantity: number;
-            }[]
-          ).map((row) => [row.number, row.quantity]),
+        const previousQuantities = owned.quantitiesByExpansion(
+          round.expansion_id,
         );
         const plan = planFinalize({
           expansion_id: round.expansion_id,
@@ -532,7 +518,7 @@ export function registerRoundTools(server: McpServer): void {
 
         const now = new Date().toISOString();
         for (const write of plan.writes) {
-          writeOwned.run(write.card_id, write.applied, now);
+          owned.setQuantity(write.card_id, write.applied, now);
           writeAudit.run({
             round_id,
             card_number: write.card_number,

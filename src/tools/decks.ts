@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getDb } from "../db.js";
+import { ownedRepo } from "../repositories/owned.js";
 import { fetchMetaDecks, fetchDecklist, type DeckCard } from "../limitless.js";
 
 export function registerDeckTools(server: McpServer): void {
@@ -78,10 +78,7 @@ Ejemplo de flujo: ptcgp_meta_decks -> elegir slug -> ptcgp_get_decklist(slug) ->
     async ({ slug, finish_index }) => {
       try {
         const deck = await fetchDecklist(slug, finish_index);
-        const db = getDb();
-        const ownedStmt = db.prepare(
-          "SELECT quantity FROM owned WHERE card_id = ?",
-        );
+        const ownedRepository = ownedRepo();
         const missing: {
           card_id: string | null;
           name: string;
@@ -92,8 +89,7 @@ Ejemplo de flujo: ptcgp_meta_decks -> elegir slug -> ptcgp_get_decklist(slug) ->
         function annotate(cards: DeckCard[]): (DeckCard & { owned: number })[] {
           return cards.map((c) => {
             const owned = c.card_id
-              ? ((ownedStmt.get(c.card_id) as { quantity: number } | undefined)
-                  ?.quantity ?? 0)
+              ? ownedRepository.getQuantity(c.card_id)
               : 0;
             if (owned < c.count)
               missing.push({

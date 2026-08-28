@@ -47,6 +47,25 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/**
+ * Runs `fn` inside a single deferred transaction on the shared connection.
+ * Repository statements invoked within `fn` participate in the same transaction
+ * because better-sqlite3 is synchronous and single-connection.
+ */
+export function inTransaction<T>(fn: () => T): T {
+  return getDb().transaction(fn)();
+}
+
+/**
+ * Like {@link inTransaction} but starts the transaction in IMMEDIATE mode, so a
+ * write lock is taken up front. Used by round finalization to make its
+ * read-plan-write cycle atomic against other local processes sharing the data
+ * directory.
+ */
+export function inImmediateTransaction<T>(fn: () => T): T {
+  return getDb().transaction(fn).immediate();
+}
+
 const INITIAL_SCHEMA = `
     CREATE TABLE IF NOT EXISTS cards (
       id TEXT PRIMARY KEY,
