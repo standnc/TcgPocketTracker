@@ -1,22 +1,21 @@
 # ptcgp-mcp-server
 
-Local MCP server for a Pokémon TCG Pocket card catalog and a personal SQLite collection. It uses the MCP standard and the stdio transport; it has no dependency on Claude, Anthropic, OpenAI, or any specific AI model. Any MCP-compatible client can launch the process.
+Servidor MCP local para un catálogo de Pokémon TCG Pocket y una colección personal en SQLite. Usa el estándar MCP con transporte stdio; no depende de Claude, Anthropic, OpenAI ni de ningún modelo concreto — cualquier cliente compatible con MCP puede lanzar el proceso.
 
-This is a preparation-stage project, not a published package. Keep personal databases and screenshots outside any future public repository.
+Este es un proyecto en fase de preparación, todavía no publicado. No lo instales pensando en usarlo como paquete público: hoy es un checkout local (`package.json` marcado como `"private": true`, sin remoto Git configurado).
 
-## Verified capabilities
+## Qué funciona hoy (verificado)
 
-- Starts as an MCP server over stdio and exposes 17 tools.
-- Creates a local SQLite database in `PTCGP_DATA_DIR` (or a per-user data directory) with WAL, foreign keys, and basic integrity checking.
-- Searches catalog data; reports collection statistics, missing cards, card details, expansions, and quantities.
-- Updates collection quantities individually, in a bulk transaction, or by card-number range.
-- Records capture rounds, validates a header count against detected/confirmed gaps, and applies a valid round in a transaction.
-- Normalizes local PNG, JPEG, and WebP images before local Tesseract OCR. HEIC/HEIF are allow-listed in code but are not yet guaranteed across native Sharp/libvips builds.
-- Contains tools for catalog synchronization/enrichment and meta-deck/decklist lookup. These use third-party network sources and remain partially tested; see [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md).
+- Arranca como servidor MCP sobre stdio y expone **17 tools** (tabla más abajo). Verificado con `npm run smoke`, que levanta el binario compilado contra un directorio de datos temporal y lista las tools reales.
+- Crea una base SQLite local en `PTCGP_DATA_DIR` (o en `~/.local/share/ptcgp-mcp` por defecto) con WAL, claves foráneas y migraciones versionadas forward-only.
+- Todas las escrituras de colección (individual, masiva, por rango) usan sentencias SQL parametrizadas y corren dentro de una transacción cuando afectan a varias filas.
+- Las rondas de captura validan un contador de cabecera contra los huecos detectados/confirmados y solo aplican cambios a la colección de forma transaccional, con `confirm=true` explícito.
+- Normaliza capturas PNG/JPEG/WebP (con corrección de orientación) y ejecuta OCR local con Tesseract; ninguna imagen sale de la máquina. **HEIC/HEIF está en la lista de formatos aceptados en el código pero no está soportado por el build de Sharp instalado en este entorno** — no lo des por bueno sin comprobarlo tú mismo.
+- Incluye tools de sincronización/enriquecimiento de catálogo y de consulta de mazos meta, que dependen de fuentes de red de terceros (GitHub, TCGdex, Limitless TCG) y son la parte menos robusta del proyecto: ver [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md) para el detalle de por qué.
 
-## Development setup
+## Instalación para desarrollo
 
-Node 24 is the preferred development runtime (`.nvmrc`); Node 22 remains supported and covered by CI for compatibility. A clean install and full suite have been verified on Node 22 and Node 24. Run `npm ci` after changing Node versions because `better-sqlite3` is a native dependency and must be installed for that runtime.
+Node 22 o 24 (`.nvmrc` fija 24 como preferido; CI cubre ambas). `better-sqlite3` es una dependencia nativa: tras cambiar de versión de Node, vuelve a instalar.
 
 ```bash
 npm ci
@@ -25,52 +24,43 @@ npm test
 npm run smoke
 ```
 
-`npm test` builds TypeScript and runs the current SQLite/MCP and synthetic-image tests. `npm run smoke` starts the compiled stdio server in a fresh temporary data directory, lists its tools, and runs `PRAGMA quick_check` on that temporary database. `npm run verify` additionally checks formatting, linting and the package contents without publishing anything.
+- `npm test` compila y ejecuta la suite (`node --test`) sobre un directorio de datos que tú controlas.
+- `npm run smoke` arranca el servidor stdio compilado en un directorio temporal propio, lista sus tools y ejecuta `PRAGMA quick_check` sobre esa base temporal.
+- `npm run verify` añade formato (`prettier --check`), lint (`eslint`) y `npm pack --dry-run` — no publica nada.
 
-To build only:
+Nunca ejecutes tests, sync o rondas contra tu `PTCGP_DATA_DIR` real sin backup previo.
 
-```bash
-npm run build
-```
-
-## MCP client configuration
-
-Build first, choose a private data directory, then configure any MCP-compatible client to run:
+## Configurar un cliente MCP
 
 ```json
 {
   "command": "node",
-  "args": ["/absolute/path/to/ptcgp-mcp-server/dist/index.js"],
+  "args": ["/ruta/absoluta/a/ptcgp-mcp-server/dist/index.js"],
   "env": {
-    "PTCGP_DATA_DIR": "/absolute/path/outside-the-repository/ptcgp-mcp-data"
+    "PTCGP_DATA_DIR": "/ruta/absoluta/fuera-del-repo/ptcgp-mcp-data"
   }
 }
 ```
 
-The server uses stdout for MCP messages. Do not add normal logging to stdout.
+El servidor usa stdout exclusivamente para el protocolo MCP; nunca escribas ahí manualmente. `PTCGP_LOG_LEVEL` acepta `fatal|error|warn|info|debug|trace|silent` (por defecto `info`) y controla logs estructurados en stderr — hoy el logging operativo es mínimo (solo arranque/errores fatales), así que no confíes en él para depurar el comportamiento de una tool concreta todavía.
 
-Set `PTCGP_LOG_LEVEL` to `fatal`, `error`, `warn`, `info` (default), `debug`, `trace`, or `silent` when diagnostics are needed. Logs are structured JSON written to stderr; do not put captures, credentials, tokens or full tool payloads into logs.
+## Tools MCP
 
-## MCP tools
+| Grupo             | Tools                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Catálogo          | `ptcgp_search_cards`, `ptcgp_get_card`, `ptcgp_list_expansions`, `ptcgp_sync_catalog`, `ptcgp_enrich_catalog`                  |
+| Colección         | `ptcgp_collection_stats`, `ptcgp_missing_cards`, `ptcgp_set_card_quantity`, `ptcgp_bulk_update_collection`, `ptcgp_mark_range` |
+| Mazos             | `ptcgp_meta_decks`, `ptcgp_get_decklist`                                                                                       |
+| Rondas de captura | `ptcgp_round_start`, `ptcgp_round_analyze_screenshots`, `ptcgp_round_record`, `ptcgp_round_status`, `ptcgp_round_finalize`     |
 
-| Group          | Tools                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Catalog        | `ptcgp_search_cards`, `ptcgp_get_card`, `ptcgp_list_expansions`, `ptcgp_sync_catalog`, `ptcgp_enrich_catalog`                  |
-| Collection     | `ptcgp_collection_stats`, `ptcgp_missing_cards`, `ptcgp_set_card_quantity`, `ptcgp_bulk_update_collection`, `ptcgp_mark_range` |
-| Decks          | `ptcgp_meta_decks`, `ptcgp_get_decklist`                                                                                       |
-| Capture rounds | `ptcgp_round_start`, `ptcgp_round_analyze_screenshots`, `ptcgp_round_record`, `ptcgp_round_status`, `ptcgp_round_finalize`     |
+Flujo seguro de una ronda: `round_start` → `round_analyze_screenshots` → revisión humana con `round_record` → `round_status` → `round_finalize(confirm=true)`. La comprobación de contadores protege contra muchas lecturas incompletas, pero no prueba por sí sola que las capturas cubran toda la expansión: la revisión visual sigue siendo obligatoria.
 
-For capture rounds, the safe workflow is start -> analyze -> human review/record -> status -> finalize with `confirm=true`. The count check protects against many incomplete reads, but does not yet prove full screenshot coverage; review is mandatory.
+## Datos y privacidad
 
-## Data and privacy
+- No se versiona ninguna base de datos, backup, captura real, `.env` ni log — `.gitignore` los excluye y esto se verificó contra `git ls-files`, no solo se asume.
+- Haz backup de una base SQLite con WAL usando herramientas conscientes de SQLite y con el servidor parado; copiar solo el `.db` mientras está activo puede dejarlo inconsistente.
+- El proyecto no requiere ninguna clave de API. Está bajo licencia MIT pero marcado `"private": true` para evitar una publicación accidental en npm mientras dure esta fase de preparación.
 
-- `PTCGP_DATA_DIR` is optional and must not be empty. A relative value is resolved from the process working directory; an absolute directory is clearer for client configuration.
-- Do not commit `collection.db`, `-wal`, `-shm`, backups, screenshots, `.env` files, logs, or tool-output captures. The included `.gitignore` protects a future repository only.
-- Back up a WAL-backed SQLite database with SQLite-aware tooling while the server is stopped. Copying only the main `.db` file while it is active can be inconsistent.
-- The project does not require an API key. It is MIT-licensed but marked `private` in `package.json` to prevent accidental npm publication during this preparation stage. See [SECURITY.md](SECURITY.md) for reporting and local-safety guidance.
+## Límites actuales
 
-## Current limits and next work
-
-There is no public npm package, complete CLI, Streamable HTTP transport, automated backup/restore feature, or release process yet. SQLite now records forward-only schema migrations, but it does not yet create an automatic backup before a migration or support downgrade recovery. Structured stderr logging is present, but its redaction policy, correlation IDs, and metrics remain future work.
-
-Read [HANDOFF.md](HANDOFF.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md), and the future [web tracker plan](WEB_TRACKER_PLAN.md) before extending the project.
+No hay CLI, transporte Streamable HTTP, backup/restore como funcionalidad del servidor, ni proceso de publicación. Las tools que dependen de red (sync de catálogo, enriquecimiento, mazos meta) no tienen tests de contrato ni protección ante cambios de esquema/maquetación upstream. Antes de ampliar el proyecto, lee [HANDOFF.md](HANDOFF.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md) y [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md).

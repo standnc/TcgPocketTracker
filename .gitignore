@@ -40,3 +40,6 @@ temp/
 # Local tooling
 .DS_Store
 *.swp
+.vscode/
+.idea/
+*.tsbuildinfo

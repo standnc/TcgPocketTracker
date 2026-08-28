@@ -5,12 +5,12 @@ Last updated: 2026-08-28. This file is the operational starting point for a futu
 ## Repository and safety status
 
 - Working repository: `/home/pedro/proyectos/ptcgp-mcp-server` in Kali WSL.
-- Current branch: `main`.
+- Documentation branch: `open-source-prep` (currently based on the same preparation commit as `main`). Do not switch branches, reset, or discard pending documentation without the owner’s instruction.
 - Preparation commits:
   - `587166a chore: establish safe open source baseline`
   - `499fd2a docs: add web tracker implementation plan`
   - `8435178 chore: modernize MCP runtime baseline`
-- There is no Git remote configured. Nothing has been pushed, published to npm, registered in MCP registries, or deployed.
+- No Git remote is configured at the time of this handoff. Nothing has been pushed, published to npm, registered in MCP registries, or deployed.
 - `package.json` has `"private": true`; retain it until the owner explicitly authorizes publication.
 - Production SQLite databases, WAL/SHM files, backups, captures, cookies, tokens, `.env` files, logs, and temporary outputs must remain outside Git. `.gitignore` protects these paths, but an ignored file is still private and must not be copied into fixtures or documentation.
 - Tests and smoke checks must use a temporary `PTCGP_DATA_DIR`. Do not run a migration, sync, OCR round, or recovery test against the owner’s live directory without explicit approval and a verified SQLite-aware backup.
@@ -36,8 +36,8 @@ Verified implementation properties:
 ## What is not a public guarantee
 
 - OCR accuracy, screenshot coverage, and automatic capture completion are not proven by the public test corpus. Human review before a round is finalized is mandatory.
-- HEIC/HEIF is allow-listed in code but not proven across native Sharp/libvips builds.
-- Network-based catalog, enrichment, Limitless/meta-deck and decklist features are implementation-present but lack hermetic fixtures, contract tests, source licensing review, and rate-limit policy.
+- HEIC/HEIF is allow-listed in code but not supported by the audited Sharp build: its HEIF input suffix list contains only `.avif`. Do not claim iPhone HEIC support until a suitable build and legal fixture prove it.
+- Network-based catalog, enrichment, Limitless/meta-deck and decklist features are implementation-present but lack hermetic fixtures, contract tests, a completed source-rights decision, and rate-limit policy.
 - There is no backup/restore MCP tool, automatic backup before migration, downgrade path, CLI, Streamable HTTP transport, authentication layer, metrics, correlation IDs, or logging redaction policy.
 - SQLite is the correct local single-user store today. It is not the chosen store for the future multi-user tracker; see `WEB_TRACKER_PLAN.md`.
 

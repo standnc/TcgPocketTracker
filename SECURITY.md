@@ -1,19 +1,26 @@
-# Security policy
+# Política de seguridad
 
-## Supported scope
+## Alcance
 
-This project is a local MCP server. Its SQLite collection, capture rounds, screenshots and environment files are private user data and must never be committed or attached to public issues.
+Este proyecto es un servidor MCP local de un solo usuario. Su base SQLite, las rondas de captura, las capturas de pantalla y cualquier `.env` son datos privados del usuario y nunca deben adjuntarse a un issue público ni a un reporte.
 
-The server currently uses the stdio transport. Catalog enrichment and deck tools make outbound HTTPS requests only when their corresponding MCP tool or sync script is invoked. The project does not require an API key.
+El único transporte activo es stdio (proceso local, sin puerto de red abierto). Las tools de sincronización de catálogo, enriquecimiento y mazos meta hacen peticiones HTTPS salientes únicamente cuando se invocan explícitamente. El servidor no requiere ninguna clave de API.
 
-## Reporting a vulnerability
+Fuentes de red usadas actualmente por el código (ver `OPEN_SOURCE_GAP_ANALYSIS.md` para el detalle de robustez de cada una):
 
-Until a public repository and contact channel exist, report security issues privately to the maintainer. Do not include collection databases, screenshots, absolute local paths, tokens, cookies, or unredacted logs in a public report.
+- `raw.githubusercontent.com` (dataset base de cartas, `src/sync.ts`)
+- API de TCGdex (`src/sync.ts`)
+- Limitless TCG, vía scraping HTML (`src/limitless.ts`)
 
-Include a minimal reproduction, affected version or commit, impact, and any safe mitigation you found. Please allow the maintainer time to investigate before public disclosure.
+## Reportar una vulnerabilidad
 
-## Local safety notes
+Mientras no exista un repositorio remoto ni un canal de contacto público, reporta cualquier problema de seguridad de forma privada al mantenedor. No incluyas en el reporte: bases de datos de colección, capturas de pantalla reales, rutas absolutas locales, tokens, cookies ni logs sin redactar.
 
-- Keep `PTCGP_DATA_DIR` outside a clone intended for publication.
-- Back up SQLite using SQLite-aware tooling while the server is stopped; do not copy only a WAL-backed `.db` file while it is in use.
-- Review `git status --ignored` before the first commit. `.gitignore` cannot remove data already committed in another repository or archive.
+Incluye una reproducción mínima, la versión o commit afectado, el impacto, y cualquier mitigación segura que hayas encontrado. Da tiempo al mantenedor para investigar antes de una divulgación pública.
+
+## Notas de seguridad local
+
+- Mantén `PTCGP_DATA_DIR` fuera de cualquier clon pensado para publicación.
+- Haz backup de la base SQLite con herramientas conscientes de SQLite y con el servidor parado; no copies solo el `.db` mientras está en uso con WAL activo, puede quedar inconsistente.
+- Revisa `git status --ignored` antes del primer commit hacia un remoto nuevo. `.gitignore` no elimina datos que ya estuvieran comprometidos en otro repositorio, backup o archivo comprimido.
+- Antes de conectar cualquier remoto público (fase 6 del roadmap), escanea el historial completo de Git en busca de secretos, no solo el árbol de trabajo actual.
