@@ -71,4 +71,4 @@ For capture rounds, the safe workflow is start -> analyze -> human review/record
 
 There is no public npm package, complete CLI, Streamable HTTP transport, automated backup/restore feature, structured logging, or release process yet. SQLite now records forward-only schema migrations, but it does not yet create an automatic backup before a migration or support downgrade recovery.
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), and [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md) before extending the project.
+Read [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md), and the future [web tracker plan](WEB_TRACKER_PLAN.md) before extending the project.

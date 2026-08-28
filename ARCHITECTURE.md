@@ -53,3 +53,7 @@ The target is provider-agnostic: an MCP client supplies requests, and no domain 
 - Remote data sources are optional adapters; a local collection must remain usable without a model provider or remote sync.
 - Stored capture paths and image hashes are private local metadata, not publishable sample data.
 - A client-facing tool description is not evidence of a feature: claims in README must follow executable tests or a documented manual verification.
+
+## Future web tracker
+
+The tracker is intentionally planned as a separate web/API project backed by PostgreSQL. The MCP remains an adapter, not the database or a web backend. The full infrastructure, migration, data-ownership, OCR and deployment plan is in [WEB_TRACKER_PLAN.md](WEB_TRACKER_PLAN.md).

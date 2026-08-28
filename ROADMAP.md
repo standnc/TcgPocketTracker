@@ -45,3 +45,7 @@ This roadmap is ordered. Items are proposals, not functionality already delivere
 - Complete package, security, compatibility, and operational documentation first.
 - Then evaluate registry metadata and Smithery requirements against the stable stdio package.
 - Do not register or publish until the maintainer explicitly approves a public release.
+
+## Related future project: web tracker
+
+The tracker should not be folded into this server prematurely. Its PostgreSQL, VPS, web/API, OCR and MCP-integration phases are documented in [WEB_TRACKER_PLAN.md](WEB_TRACKER_PLAN.md).
