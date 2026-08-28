@@ -4,6 +4,14 @@ import { z } from "zod";
 import { analyzeScreenshots } from "../screenshot-analyzer.js";
 import { catalogIsEmpty, EMPTY_CATALOG_MSG, getDb } from "../db.js";
 import { parseNumbers } from "./collection.js";
+import {
+  classifyDetections,
+  planFinalize,
+  planRecord,
+  summarizeRoundValidation,
+  validateRoundStart,
+  type RoundObservation,
+} from "../domain/rounds.js";
 
 interface RoundRow {
   id: string;
@@ -73,6 +81,18 @@ function parseSpec(spec: string | undefined, label: string): number[] {
   return numbers;
 }
 
+/** Maps a persisted round-card row to the framework-free domain observation. */
+function toObservation(row: RoundCardRow): RoundObservation {
+  return {
+    card_number: row.card_number,
+    state: row.state,
+    quantity: row.quantity,
+    confidence: row.confidence,
+    confirmed: !!row.confirmed,
+    source: row.source,
+  };
+}
+
 export function registerRoundTools(server: McpServer): void {
   server.registerTool(
     "ptcgp_round_start",
@@ -109,14 +129,12 @@ export function registerRoundTools(server: McpServer): void {
         return errorResult(
           `Expansión '${exp}' no encontrada. Consulta ptcgp_list_expansions.`,
         );
-      if (
-        expected_owned_unique !== undefined &&
-        expected_owned_unique > numbers.length
-      ) {
-        return errorResult(
-          `expected_owned_unique=${expected_owned_unique} supera las ${numbers.length} cartas del catálogo para ${exp}.`,
-        );
-      }
+      const startError = validateRoundStart(
+        numbers.length,
+        expected_owned_unique,
+        exp,
+      );
+      if (startError) return errorResult(startError.message);
       const now = new Date().toISOString();
       const id = `${exp}-${now.slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8)}`;
       getDb()
@@ -182,6 +200,22 @@ export function registerRoundTools(server: McpServer): void {
             )
             .get(round_id) as { n: number }
         ).n;
+        const confirmedOwned = new Set(
+          (
+            db
+              .prepare(
+                "SELECT card_number FROM capture_round_cards WHERE round_id = ? AND confirmed = 1 AND state = 'owned'",
+              )
+              .all(round_id) as { card_number: number }[]
+          ).map((row) => row.card_number),
+        );
+        const { contradictions, upserts } = classifyDetections(
+          confirmedOwned,
+          analyses.map((analysis) => ({
+            path: analysis.path,
+            detected_missing: analysis.detected_missing,
+          })),
+        );
         const insertImage = db.prepare(`
           INSERT INTO capture_round_images
             (round_id, path, sha256, width, height, capture_order, analysis, created_at)
@@ -189,9 +223,6 @@ export function registerRoundTools(server: McpServer): void {
           ON CONFLICT(round_id, sha256) DO UPDATE SET
             path=excluded.path, width=excluded.width, height=excluded.height, analysis=excluded.analysis
         `);
-        const existingCard = db.prepare(
-          "SELECT state, confirmed, confidence FROM capture_round_cards WHERE round_id = ? AND card_number = ?",
-        );
         const upsertDetection = db.prepare(`
           INSERT INTO capture_round_cards
             (round_id, card_number, state, quantity, confidence, confirmed, source, updated_at)
@@ -203,11 +234,6 @@ export function registerRoundTools(server: McpServer): void {
             source=CASE WHEN capture_round_cards.confirmed=0 THEN excluded.source ELSE capture_round_cards.source END,
             updated_at=excluded.updated_at
         `);
-        const contradictions: {
-          number: number;
-          confirmed_state: string;
-          source: string;
-        }[] = [];
         const now = new Date().toISOString();
         db.transaction(() => {
           analyses.forEach((analysis, index) => {
@@ -221,27 +247,16 @@ export function registerRoundTools(server: McpServer): void {
               analysis: JSON.stringify(analysis),
               created_at: now,
             });
-            for (const detection of analysis.detected_missing) {
-              const existing = existingCard.get(round_id, detection.number) as
-                | { state: string; confirmed: number; confidence: number }
-                | undefined;
-              if (existing?.confirmed && existing.state === "owned") {
-                contradictions.push({
-                  number: detection.number,
-                  confirmed_state: existing.state,
-                  source: analysis.path,
-                });
-                continue;
-              }
-              upsertDetection.run(
-                round_id,
-                detection.number,
-                detection.confidence,
-                analysis.path,
-                now,
-              );
-            }
           });
+          for (const detection of upserts) {
+            upsertDetection.run(
+              round_id,
+              detection.card_number,
+              detection.confidence,
+              detection.source,
+              now,
+            );
+          }
           db.prepare(
             "UPDATE capture_rounds SET status='review', updated_at=? WHERE id=?",
           ).run(now, round_id);
@@ -322,41 +337,15 @@ export function registerRoundTools(server: McpServer): void {
       try {
         const missing = parseSpec(missing_numbers, "missing_numbers");
         const owned = parseSpec(owned_numbers, "owned_numbers");
-        if (!missing.length && !owned.length && !quantities.length) {
-          return errorResult(
-            "Indica missing_numbers, owned_numbers o quantities.",
-          );
-        }
-        const missingSet = new Set(missing);
-        const ownedSet = new Set(owned);
-        for (const item of quantities) ownedSet.add(item.number);
-        const overlap = [...missingSet].filter((number) =>
-          ownedSet.has(number),
-        );
-        if (overlap.length)
-          return errorResult(
-            `Números contradictorios como owned y missing: ${overlap.join(", ")}`,
-          );
-        const validNumbers = new Set(expansionNumbers(round.expansion_id));
-        const invalid = [...missingSet, ...ownedSet].filter(
-          (number) => !validNumbers.has(number),
-        );
-        if (invalid.length)
-          return errorResult(
-            `Números fuera de ${round.expansion_id}: ${[...new Set(invalid)].join(", ")}`,
-          );
-        const quantityMap = new Map(
-          quantities.map((item) => [item.number, item.quantity]),
-        );
-        if (round.quantity_mode === "exact") {
-          const withoutQuantity = [...ownedSet].filter(
-            (number) => !quantityMap.has(number),
-          );
-          if (withoutQuantity.length)
-            return errorResult(
-              `El modo exact requiere quantity para: ${withoutQuantity.join(", ")}`,
-            );
-        }
+        const plan = planRecord({
+          quantity_mode: round.quantity_mode,
+          expansion_id: round.expansion_id,
+          missing,
+          owned,
+          quantities,
+          valid_numbers: new Set(expansionNumbers(round.expansion_id)),
+        });
+        if (!plan.ok) return errorResult(plan.message);
         const now = new Date().toISOString();
         const upsert = getDb().prepare(`
           INSERT INTO capture_round_cards
@@ -367,22 +356,15 @@ export function registerRoundTools(server: McpServer): void {
             source=excluded.source, updated_at=excluded.updated_at
         `);
         getDb().transaction(() => {
-          for (const number of missingSet)
+          for (const item of plan.upserts) {
             upsert.run({
               round_id,
-              card_number: number,
-              state: "missing",
-              quantity: 0,
+              card_number: item.card_number,
+              state: item.state,
+              quantity: item.quantity,
               updated_at: now,
             });
-          for (const number of ownedSet)
-            upsert.run({
-              round_id,
-              card_number: number,
-              state: "owned",
-              quantity: quantityMap.get(number) ?? 1,
-              updated_at: now,
-            });
+          }
           getDb()
             .prepare(
               "UPDATE capture_rounds SET status='review', updated_at=? WHERE id=?",
@@ -391,8 +373,8 @@ export function registerRoundTools(server: McpServer): void {
         })();
         return textResult({
           round_id,
-          confirmed_missing: missingSet.size,
-          confirmed_owned: ownedSet.size,
+          confirmed_missing: plan.confirmed_missing,
+          confirmed_owned: plan.confirmed_owned,
           collection_changed: false,
         });
       } catch (error) {
@@ -444,7 +426,9 @@ export function registerRoundTools(server: McpServer): void {
         FROM capture_round_cards WHERE round_id=? ORDER BY card_number
       `,
         )
-        .all(round_id) as RoundCardRow[];
+        .all(round_id) as (Omit<RoundCardRow, "card_number"> & {
+        number: number;
+      })[];
       const images = db
         .prepare(
           `
@@ -453,25 +437,16 @@ export function registerRoundTools(server: McpServer): void {
       `,
         )
         .all(round_id);
-      const missing = cards.filter((card) => card.state === "missing");
-      return textResult({
-        round,
-        images,
-        observations: cards,
-        validation: {
-          missing_count: missing.length,
-          implied_owned_unique: round.expected_total - missing.length,
-          expected_owned_unique: round.expected_owned_unique,
-          counts_match:
-            round.expected_owned_unique === null
-              ? null
-              : round.expected_total - missing.length ===
-                round.expected_owned_unique,
-          unconfirmed: cards
-            .filter((card) => !card.confirmed)
-            .map((card) => card.card_number),
-        },
-      });
+      const validation = summarizeRoundValidation(
+        round.expected_total,
+        round.expected_owned_unique,
+        cards.map((card) => ({
+          card_number: card.number,
+          state: card.state,
+          confirmed: !!card.confirmed,
+        })),
+      );
+      return textResult({ round, images, observations: cards, validation });
     },
   );
 
@@ -498,73 +473,43 @@ export function registerRoundTools(server: McpServer): void {
       if (!round) return errorResult(`Ronda '${round_id}' no encontrada.`);
       const editError = assertEditable(round);
       if (editError) return errorResult(editError);
-      const expectedOwned =
-        expected_owned_unique ?? round.expected_owned_unique;
-      if (expectedOwned === null) {
-        return errorResult(
-          "Falta expected_owned_unique. Lee y suma los contadores de la cabecera de la expansión.",
-        );
-      }
-      if (expectedOwned > round.expected_total)
-        return errorResult(
-          "expected_owned_unique supera el total de la expansión.",
-        );
-      const observations = getDb()
-        .prepare(
-          `
+      const db = getDb();
+      const observations = (
+        db
+          .prepare(
+            `
         SELECT card_number, state, quantity, confidence, confirmed, source
         FROM capture_round_cards WHERE round_id=? ORDER BY card_number
       `,
-        )
-        .all(round_id) as RoundCardRow[];
-      const excludedAuto = observations.filter(
-        (item) => !item.confirmed && !use_auto_detections,
-      );
-      const lowConfidence = observations.filter(
-        (item) =>
-          !item.confirmed && use_auto_detections && item.confidence < 0.84,
-      );
-      if (lowConfidence.length) {
-        return errorResult(
-          `OCR con confianza insuficiente; confirma manualmente: ${lowConfidence.map((item) => item.card_number).join(", ")}`,
-        );
-      }
-      const usable = observations.filter(
-        (item) => item.confirmed || use_auto_detections,
-      );
-      const missing = new Set(
-        usable
-          .filter((item) => item.state === "missing")
-          .map((item) => item.card_number),
-      );
-      const impliedOwned = round.expected_total - missing.size;
-      if (impliedOwned !== expectedOwned) {
-        return errorResult(
-          `La ronda no cuadra: catálogo=${round.expected_total}, huecos=${missing.size}, poseídas implícitas=${impliedOwned}, ` +
-            `pero la cabecera indica ${expectedOwned}. Faltan ${Math.abs(impliedOwned - expectedOwned)} huecos por revisar.`,
-        );
-      }
-      if (round.quantity_mode === "exact") {
-        const explicitOwned = usable.filter(
-          (item) => item.state === "owned" && item.quantity !== null,
-        );
-        if (explicitOwned.length !== expectedOwned) {
-          return errorResult(
-            `El modo exact necesita cantidades explícitas para las ${expectedOwned} cartas poseídas; hay ${explicitOwned.length}.`,
-          );
-        }
-      }
-
+          )
+          .all(round_id) as RoundCardRow[]
+      ).map(toObservation);
       const numbers = expansionNumbers(round.expansion_id);
-      const observationMap = new Map(
-        usable.map((item) => [item.card_number, item]),
+      const previousQuantities = new Map<number, number>(
+        (
+          db
+            .prepare(
+              `
+          SELECT c.number AS number, COALESCE(o.quantity,0) AS quantity FROM cards c
+          LEFT JOIN owned o ON o.card_id=c.id WHERE c.expansion_id=?
+        `,
+            )
+            .all(round.expansion_id) as { number: number; quantity: number }[]
+        ).map((row) => [row.number, row.quantity]),
       );
-      const db = getDb();
-      const currentStmt = db.prepare(`
-        SELECT COALESCE(o.quantity,0) AS quantity FROM cards c
-        LEFT JOIN owned o ON o.card_id=c.id
-        WHERE c.expansion_id=? AND c.number=?
-      `);
+      const plan = planFinalize({
+        expansion_id: round.expansion_id,
+        expected_total: round.expected_total,
+        quantity_mode: round.quantity_mode,
+        expected_owned_unique:
+          expected_owned_unique ?? round.expected_owned_unique,
+        observations,
+        use_auto_detections,
+        expansion_numbers: numbers,
+        previous_quantities: previousQuantities,
+      });
+      if (!plan.ok) return errorResult(plan.message);
+
       const writeOwned = db.prepare(`
         INSERT INTO owned (card_id, quantity, updated_at) VALUES (?, ?, ?)
         ON CONFLICT(card_id) DO UPDATE SET quantity=excluded.quantity, updated_at=excluded.updated_at
@@ -578,64 +523,44 @@ export function registerRoundTools(server: McpServer): void {
           previous_quantity=excluded.previous_quantity, applied_quantity=excluded.applied_quantity,
           updated_at=excluded.updated_at
       `);
-      let changed = 0;
-      let preservedHigherQuantities = 0;
       const now = new Date().toISOString();
       db.transaction(() => {
-        for (const number of numbers) {
-          const cardId = `${round.expansion_id}-${String(number).padStart(3, "0")}`;
-          const previous = (
-            currentStmt.get(round.expansion_id, number) as { quantity: number }
-          ).quantity;
-          const observation = observationMap.get(number);
-          let applied: number;
-          if (missing.has(number)) {
-            applied = 0;
-          } else if (round.quantity_mode === "exact") {
-            applied = observation?.quantity ?? 0;
-          } else {
-            applied = Math.max(previous, observation?.quantity ?? 1);
-            if (previous > 1 && applied === previous)
-              preservedHigherQuantities++;
-          }
-          if (applied !== previous) changed++;
-          writeOwned.run(cardId, applied, now);
+        for (const write of plan.writes) {
+          writeOwned.run(write.card_id, write.applied, now);
           writeAudit.run({
             round_id,
-            card_number: number,
-            state: applied > 0 ? "owned" : "missing",
-            quantity: applied,
-            source: observation?.source ?? "full-round-complement",
-            previous_quantity: previous,
-            applied_quantity: applied,
+            card_number: write.card_number,
+            state: write.state,
+            quantity: write.applied,
+            source: write.source,
+            previous_quantity: write.previous,
+            applied_quantity: write.applied,
             updated_at: now,
           });
         }
         const summary = JSON.stringify({
           total: round.expected_total,
-          owned_unique: expectedOwned,
-          missing: missing.size,
-          changed,
-          preserved_higher_quantities: preservedHigherQuantities,
-          excluded_auto_detections: excludedAuto.map(
-            (item) => item.card_number,
-          ),
+          owned_unique: plan.expected_owned_unique,
+          missing: plan.missing_count,
+          changed: plan.changed,
+          preserved_higher_quantities: plan.preserved_higher_quantities,
+          excluded_auto_detections: plan.excluded_auto_detections,
         });
         db.prepare(
           `
           UPDATE capture_rounds SET status='applied', expected_owned_unique=?, updated_at=?, finalized_at=?, summary=? WHERE id=?
         `,
-        ).run(expectedOwned, now, now, summary, round_id);
+        ).run(plan.expected_owned_unique, now, now, summary, round_id);
       })();
       return textResult({
         round_id,
         expansion: round.expansion_id,
         applied: true,
         total: round.expected_total,
-        owned_unique: expectedOwned,
-        missing: missing.size,
-        changed,
-        preserved_higher_quantities: preservedHigherQuantities,
+        owned_unique: plan.expected_owned_unique,
+        missing: plan.missing_count,
+        changed: plan.changed,
+        preserved_higher_quantities: plan.preserved_higher_quantities,
       });
     },
   );

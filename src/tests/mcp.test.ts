@@ -226,3 +226,34 @@ test("una ronda que no cuadra queda bloqueada sin tocar la colección", async ()
     db.close();
   });
 });
+
+test("round_status lista los números reales de las cartas sin confirmar", async () => {
+  await withServer(async (client, dataDir) => {
+    const started = parseToolText(
+      await client.callTool({
+        name: "ptcgp_round_start",
+        arguments: { expansion: "t1", expected_owned_unique: 4 },
+      }),
+    );
+    const roundId = String(started.round_id);
+    // Simula una detección OCR sin confirmar (lo que produce analyze) sin
+    // depender de imágenes reales, para ejercitar el bloque de validación.
+    const seed = new Database(join(dataDir, "collection.db"));
+    seed
+      .prepare(
+        `INSERT INTO capture_round_cards
+           (round_id, card_number, state, quantity, confidence, confirmed, source, updated_at)
+         VALUES (?, 2, 'missing', 0, 0.9, 0, 'auto', ?)`,
+      )
+      .run(roundId, new Date().toISOString());
+    seed.close();
+    const status = parseToolText(
+      await client.callTool({
+        name: "ptcgp_round_status",
+        arguments: { round_id: roundId },
+      }),
+    );
+    const validation = status.validation as { unconfirmed: number[] };
+    assert.deepEqual(validation.unconfirmed, [2]);
+  });
+});
