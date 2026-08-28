@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TCG Pocket MCP | Asistente inteligente para coleccionistas</title>
+    <meta
+      name="description"
+      content="Servidor MCP open source para trackear colecciones, detectar cartas faltantes y consultar mazos de Pokémon TCG Pocket con inteligencia artificial."
+    />
+    <meta
+      name="keywords"
+      content="TCG Pocket, MCP, Pokémon TCG Pocket, inteligencia artificial, LLM, colección de cartas, mazos, open source"
+    />
+    <meta name="author" content="TCG Pocket MCP" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#070b18" />
+    <link rel="canonical" href="https://tcg-pocket.xyz/" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="mask-icon" href="/favicon.svg" color="#4f8cff" />
+
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TCG Pocket MCP" />
+    <meta
+      property="og:title"
+      content="TCG Pocket MCP – Asistente inteligente para coleccionistas de cartas"
+    />
+    <meta
+      property="og:description"
+      content="Trackea tu colección, descubre cartas faltantes y consulta mazos mediante IA con un servidor MCP open source."
+    />
+    <meta property="og:url" content="https://tcg-pocket.xyz/" />
+    <meta property="og:image" content="https://tcg-pocket.xyz/og-image.png" />
+    <meta
+      property="og:image:secure_url"
+      content="https://tcg-pocket.xyz/og-image.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="TCG Pocket MCP: servidor MCP open source con IA para Pokémon TCG Pocket."
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TCG Pocket MCP" />
+    <meta
+      name="twitter:description"
+      content="Un servidor MCP open source para gestionar colecciones de Pokémon TCG Pocket con IA."
+    />
+    <meta name="twitter:image" content="https://tcg-pocket.xyz/og-image.png" />
+    <meta
+      name="twitter:image:alt"
+      content="TCG Pocket MCP: servidor MCP open source con IA para Pokémon TCG Pocket."
+    />
+
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b18;
+        --bg-soft: #0b1124;
+        --surface: rgba(17, 25, 54, 0.72);
+        --surface-strong: #111936;
+        --line: rgba(148, 163, 184, 0.17);
+        --line-bright: rgba(96, 165, 250, 0.42);
+        --text: #f8fafc;
+        --muted: #a8b3cf;
+        --blue: #4f8cff;
+        --blue-light: #72c4ff;
+        --purple: #8b5cf6;
+        --teal: #2dd4bf;
+        --radius: 18px;
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+        --container: 1160px;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      * {
+        margin: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        min-width: 320px;
+        overflow-x: hidden;
+        background:
+          radial-gradient(
+            circle at 12% 8%,
+            rgba(79, 140, 255, 0.17),
+            transparent 29rem
+          ),
+          radial-gradient(
+            circle at 88% 24%,
+            rgba(139, 92, 246, 0.14),
+            transparent 27rem
+          ),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.6;
+        text-rendering: optimizeLegibility;
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: "";
+        opacity: 0.24;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.025) 1px,
+            transparent 1px
+          );
+        background-size: 48px 48px;
+        mask-image: linear-gradient(to bottom, #000, transparent 82%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      a,
+      button {
+        -webkit-tap-highlight-color: transparent;
+      }
+      :focus-visible {
+        outline: 3px solid var(--blue-light);
+        outline-offset: 4px;
+      }
+      .container {
+        width: min(calc(100% - 40px), var(--container));
+        margin-inline: auto;
+      }
+
+      .skip-link {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 100;
+        padding: 10px 16px;
+        border-radius: 10px;
+        background: var(--text);
+        color: var(--bg);
+        font-weight: 800;
+        transform: translateY(-150%);
+        transition: transform 0.2s ease;
+      }
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        background: rgba(7, 11, 24, 0.82);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav {
+        display: flex;
+        min-height: 72px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        font-weight: 850;
+        letter-spacing: -0.02em;
+      }
+      .brand-mark {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid rgba(114, 196, 255, 0.42);
+        border-radius: 12px;
+        background: linear-gradient(
+          135deg,
+          rgba(79, 140, 255, 0.24),
+          rgba(139, 92, 246, 0.28)
+        );
+        color: var(--blue-light);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.12);
+      }
+      .brand-mark svg {
+        width: 21px;
+        height: 21px;
+      }
+      .nav-links {
+        display: flex;
+        gap: 28px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 650;
+      }
+      .nav-links a {
+        transition: color 0.2s ease;
+      }
+      .nav-links a:hover {
+        color: var(--text);
+      }
+
+      .hero {
+        display: grid;
+        min-height: calc(100vh - 72px);
+        padding: 104px 0 96px;
+        place-items: center;
+        text-align: center;
+      }
+      .hero-content {
+        width: 100%;
+        min-width: 0;
+        max-width: 960px;
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 24px;
+        padding: 8px 13px;
+        border: 1px solid rgba(96, 165, 250, 0.25);
+        border-radius: 999px;
+        background: rgba(30, 64, 175, 0.14);
+        color: #bfdbfe;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        max-width: 100%;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--teal);
+        box-shadow: 0 0 14px var(--teal);
+      }
+
+      h1 {
+        max-width: 950px;
+        margin-inline: auto;
+        font-size: clamp(2.55rem, 7vw, 5.25rem);
+        line-height: 1.03;
+        letter-spacing: -0.055em;
+        text-wrap: balance;
+      }
+      .gradient-text {
+        background: linear-gradient(
+          100deg,
+          var(--blue-light),
+          #a78bfa 70%,
+          #67e8f9
+        );
+        background-clip: text;
+        -webkit-background-clip: text;
+        color: transparent;
+      }
+      .hero-description {
+        max-width: 770px;
+        margin: 28px auto 0;
+        color: var(--muted);
+        font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+        text-wrap: balance;
+      }
+      .hero-actions,
+      .contact-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px;
+        margin-top: 38px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 50px;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 0 22px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 800;
+        transition:
+          transform 0.2s ease,
+          border-color 0.2s ease,
+          background 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .button:hover {
+        transform: translateY(-2px);
+      }
+      .button-primary {
+        background: linear-gradient(135deg, var(--blue), #6d5dfc);
+        box-shadow: 0 13px 34px rgba(79, 140, 255, 0.3);
+        color: #fff;
+      }
+      .button-primary:hover {
+        box-shadow: 0 16px 40px rgba(79, 140, 255, 0.42);
+      }
+      .button-secondary {
+        border-color: var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        color: #dbeafe;
+      }
+      .button-secondary:hover {
+        border-color: var(--line-bright);
+        background: rgba(96, 165, 250, 0.08);
+      }
+      .button-disabled {
+        cursor: default;
+        opacity: 0.72;
+      }
+      .button-disabled:hover {
+        transform: none;
+      }
+      .button svg {
+        width: 18px;
+        height: 18px;
+      }
+      .hero-note {
+        margin-top: 22px;
+        color: #75809c;
+        font-size: 0.82rem;
+      }
+
+      .section {
+        padding: 104px 0;
+      }
+      .section-header {
+        max-width: 700px;
+        margin-bottom: 48px;
+      }
+      .section-kicker {
+        margin-bottom: 12px;
+        color: var(--blue-light);
+        font-size: 0.78rem;
+        font-weight: 900;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+      h2 {
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+        text-wrap: balance;
+      }
+      h3 {
+        font-size: 1.08rem;
+        line-height: 1.35;
+      }
+      .section-description {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 1.04rem;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+      }
+      .card {
+        position: relative;
+        overflow: hidden;
+        padding: 27px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(
+          150deg,
+          rgba(20, 30, 64, 0.84),
+          rgba(10, 16, 35, 0.76)
+        );
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+        transition:
+          transform 0.25s ease,
+          border-color 0.25s ease;
+      }
+      .card::after {
+        position: absolute;
+        right: -50px;
+        bottom: -60px;
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        background: rgba(79, 140, 255, 0.08);
+        content: "";
+        filter: blur(12px);
+      }
+      .card:hover {
+        border-color: var(--line-bright);
+        transform: translateY(-5px);
+      }
+      .card-icon {
+        display: grid;
+        width: 47px;
+        height: 47px;
+        margin-bottom: 24px;
+        place-items: center;
+        border: 1px solid rgba(96, 165, 250, 0.21);
+        border-radius: 13px;
+        background: rgba(79, 140, 255, 0.11);
+        color: var(--blue-light);
+      }
+      .card-icon svg {
+        width: 23px;
+        height: 23px;
+      }
+      .card p {
+        margin-top: 11px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .technology-layout {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        align-items: center;
+        gap: 72px;
+      }
+      .tech-panel {
+        min-height: 400px;
+        padding: 30px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          radial-gradient(
+            circle at 70% 20%,
+            rgba(139, 92, 246, 0.18),
+            transparent 45%
+          ),
+          linear-gradient(145deg, #101936, #0a1022);
+        box-shadow: var(--shadow);
+      }
+      .terminal-bar {
+        display: flex;
+        gap: 7px;
+        margin-bottom: 24px;
+      }
+      .terminal-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .terminal-dot:nth-child(1) {
+        background: #fb7185;
+      }
+      .terminal-dot:nth-child(2) {
+        background: #fbbf24;
+      }
+      .terminal-dot:nth-child(3) {
+        background: #34d399;
+      }
+      .terminal {
+        overflow-x: auto;
+        color: #b6c2de;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: clamp(0.74rem, 1.5vw, 0.9rem);
+        line-height: 1.9;
+      }
+      .terminal-comment {
+        color: #66738f;
+      }
+      .terminal-key {
+        color: #93c5fd;
+      }
+      .terminal-string {
+        color: #c4b5fd;
+      }
+      .terminal-success {
+        color: #5eead4;
+      }
+
+      .tech-list {
+        display: grid;
+        gap: 14px;
+        margin-top: 34px;
+        list-style: none;
+        padding: 0;
+      }
+      .tech-item {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 15px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .tech-check {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 9px;
+        background: rgba(45, 212, 191, 0.1);
+        color: var(--teal);
+        font-weight: 900;
+      }
+      .tech-item p {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .team-roadmap {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 24px;
+      }
+      .founder-card,
+      .roadmap-card {
+        padding: 36px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .avatar {
+        display: grid;
+        width: 76px;
+        height: 76px;
+        margin-bottom: 24px;
+        place-items: center;
+        border: 1px solid rgba(114, 196, 255, 0.35);
+        border-radius: 22px;
+        background: linear-gradient(
+          135deg,
+          rgba(79, 140, 255, 0.22),
+          rgba(139, 92, 246, 0.3)
+        );
+        color: #dbeafe;
+        font-size: 1.35rem;
+        font-weight: 900;
+      }
+      .founder-role {
+        margin-top: 6px;
+        color: var(--blue-light);
+        font-size: 0.9rem;
+        font-weight: 800;
+      }
+      .founder-bio {
+        margin-top: 17px;
+        color: var(--muted);
+      }
+
+      .roadmap {
+        display: grid;
+        gap: 0;
+        margin-top: 26px;
+        padding: 0;
+        list-style: none;
+      }
+      .roadmap-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 14px;
+        padding-bottom: 27px;
+      }
+      .roadmap-item:last-child {
+        padding-bottom: 0;
+      }
+      .roadmap-item:not(:last-child)::before {
+        position: absolute;
+        top: 34px;
+        bottom: 2px;
+        left: 16px;
+        width: 1px;
+        background: var(--line);
+        content: "";
+      }
+      .roadmap-status {
+        display: grid;
+        z-index: 1;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--surface-strong);
+        font-size: 0.92rem;
+      }
+      .roadmap-item p {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .contact {
+        padding-top: 70px;
+      }
+      .contact-panel {
+        position: relative;
+        overflow: hidden;
+        padding: 70px 40px;
+        border: 1px solid rgba(114, 196, 255, 0.24);
+        border-radius: 26px;
+        background:
+          radial-gradient(
+            circle at 12% 30%,
+            rgba(79, 140, 255, 0.2),
+            transparent 34%
+          ),
+          radial-gradient(
+            circle at 88% 70%,
+            rgba(139, 92, 246, 0.2),
+            transparent 34%
+          ),
+          #0e1630;
+        box-shadow: var(--shadow);
+        text-align: center;
+      }
+      .contact-panel h2 {
+        max-width: 720px;
+        margin-inline: auto;
+      }
+      .contact-panel > p:not(.section-kicker) {
+        max-width: 610px;
+        margin: 18px auto 0;
+        color: var(--muted);
+      }
+
+      .site-footer {
+        margin-top: 104px;
+        padding: 36px 0;
+        border-top: 1px solid var(--line);
+        color: #8792ae;
+        font-size: 0.85rem;
+      }
+      .footer-content {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 30px;
+      }
+      .footer-legal {
+        max-width: 680px;
+      }
+      .trademark {
+        margin-top: 8px;
+        color: #606b84;
+        font-size: 0.75rem;
+      }
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 20px;
+      }
+      .footer-links a:hover {
+        color: var(--text);
+      }
+
+      @media (max-width: 980px) {
+        .feature-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .technology-layout {
+          grid-template-columns: 1fr;
+          gap: 46px;
+        }
+        .technology-layout > * {
+          min-width: 0;
+        }
+        .team-roadmap {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .container {
+          width: min(calc(100% - 28px), var(--container));
+        }
+        .site-header {
+          position: relative;
+        }
+        .nav {
+          min-height: 64px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .hero {
+          min-height: auto;
+          padding: 82px 0 74px;
+        }
+        .eyebrow {
+          font-size: 0.68rem;
+          letter-spacing: 0.055em;
+        }
+        .hero-actions,
+        .contact-actions {
+          flex-direction: column;
+        }
+        .button {
+          width: 100%;
+        }
+        .section {
+          padding: 78px 0;
+        }
+        .section-header {
+          margin-bottom: 34px;
+        }
+        .feature-grid {
+          grid-template-columns: 1fr;
+        }
+        .card,
+        .founder-card,
+        .roadmap-card {
+          padding: 25px;
+        }
+        .tech-panel {
+          min-height: 350px;
+          padding: 22px;
+        }
+        .contact-panel {
+          padding: 50px 22px;
+        }
+        .footer-content {
+          flex-direction: column;
+        }
+        .footer-links {
+          justify-content: flex-start;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header">
+      <nav class="nav container" aria-label="Navegación principal">
+        <a class="brand" href="#inicio" aria-label="TCG Pocket MCP, inicio">
+          <span class="brand-mark" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <rect x="4" y="3" width="16" height="18" rx="3"></rect>
+              <path d="M8 8h8M8 12h5M8 16h7"></path>
+            </svg>
+          </span>
+          <span>TCG Pocket MCP</span>
+        </a>
+
+        <div class="nav-links">
+          <a href="#caracteristicas">Características</a>
+          <a href="#tecnologia">Tecnología</a>
+          <a href="#equipo">Equipo</a>
+          <a href="#roadmap">Roadmap</a>
+          <a href="#contacto">Contacto</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="contenido">
+      <section class="hero" id="inicio">
+        <div class="hero-content container">
+          <div class="eyebrow">
+            <span class="status-dot"></span>Open source · Prototipo funcional
+          </div>
+          <h1>
+            TCG Pocket MCP –
+            <span class="gradient-text">Asistente inteligente</span> para
+            coleccionistas de cartas
+          </h1>
+          <p class="hero-description">
+            Un servidor MCP open source que usa IA para trackear, analizar y
+            recomendar mazos en Pokémon TCG Pocket.
+          </p>
+
+          <div class="hero-actions">
+            <a
+              class="button button-primary"
+              href="https://github.com/standnc/TcgPocketTracker"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.24c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.41-1.26.74-1.55-2.57-.29-5.27-1.29-5.27-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.93 10.93 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.71 5.38-5.29 5.67.42.36.78 1.06.78 2.14v3.18c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"
+                ></path>
+              </svg>
+              Ver en GitHub
+            </a>
+            <span
+              class="button button-secondary button-disabled"
+              aria-disabled="true"
+              >Próximamente: Demo</span
+            >
+          </div>
+          <p class="hero-note">
+            Creado para jugadores de TCG, desarrolladores y entusiastas de la
+            inteligencia artificial.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="caracteristicas">
+        <div class="container">
+          <header class="section-header">
+            <p class="section-kicker">Características</p>
+            <h2>Tu colección, entendida por inteligencia artificial</h2>
+            <p class="section-description">
+              Consulta y analiza tus cartas mediante lenguaje natural, sin
+              depender de hojas de cálculo ni búsquedas manuales.
+            </p>
+          </header>
+
+          <div class="feature-grid">
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path d="m21 21-4.35-4.35"></path>
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <path d="M8 11h6M11 8v6"></path>
+                </svg>
+              </div>
+              <h3>Trackeo inteligente</h3>
+              <p>
+                Usa LLMs para identificar cartas por descripción y mantener
+                organizada tu colección.
+              </p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <rect x="4" y="3" width="13" height="17" rx="2"></rect>
+                  <path
+                    d="m8 8 2 2 4-4M8 14h5M17 7h3v14a2 2 0 0 1-2 2H8v-3"
+                  ></path>
+                </svg>
+              </div>
+              <h3>Sugerencias de mazos</h3>
+              <p>
+                Recomienda combinaciones y estrategias basadas en las cartas
+                disponibles en tu colección.
+              </p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path
+                    d="M12 3 3.5 7.5 12 12l8.5-4.5L12 3ZM3.5 12 12 16.5l8.5-4.5M3.5 16.5 12 21l8.5-4.5"
+                  ></path>
+                </svg>
+              </div>
+              <h3>Detección de faltantes</h3>
+              <p>
+                Te indica qué cartas faltan para completar expansiones, sets y
+                objetivos personales.
+              </p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path d="M8 9 4 12l4 3M16 9l4 3-4 3M14 5l-4 14"></path>
+                </svg>
+              </div>
+              <h3>Open Source y extensible</h3>
+              <p>
+                Código disponible para contribuciones, nuevas integraciones y
+                herramientas de la comunidad.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="tecnologia">
+        <div class="container technology-layout">
+          <div
+            class="tech-panel"
+            role="region"
+            aria-label="Ejemplo conceptual de una consulta al servidor MCP"
+          >
+            <div class="terminal-bar" aria-hidden="true">
+              <span class="terminal-dot"></span
+              ><span class="terminal-dot"></span
+              ><span class="terminal-dot"></span>
+            </div>
+            <div class="terminal">
+              <p class="terminal-comment">
+                # Consulta mediante lenguaje natural
+              </p>
+              <p>
+                <span class="terminal-key">usuario</span>: "¿Qué mazo puedo
+                crear con mi colección?"
+              </p>
+              <br />
+              <p><span class="terminal-key">mcp</span>.analizarColeccion({</p>
+              <p>
+                &nbsp;&nbsp;<span class="terminal-key">juego</span>:
+                <span class="terminal-string">"Pokémon TCG Pocket"</span>,
+              </p>
+              <p>
+                &nbsp;&nbsp;<span class="terminal-key">objetivo</span>:
+                <span class="terminal-string">"mazo competitivo"</span>
+              </p>
+              <p>});</p>
+              <br />
+              <p class="terminal-success">✓ Colección analizada</p>
+              <p class="terminal-success">✓ Sinergias encontradas</p>
+              <p class="terminal-success">✓ Recomendación preparada</p>
+            </div>
+          </div>
+
+          <div>
+            <header class="section-header">
+              <p class="section-kicker">Tecnología</p>
+              <h2>Una base moderna para experiencias impulsadas por IA</h2>
+              <p class="section-description">
+                Arquitectura modular para conectar modelos de lenguaje con datos
+                estructurados de colecciones TCG.
+              </p>
+            </header>
+            <ul class="tech-list">
+              <li class="tech-item">
+                <span class="tech-check" aria-hidden="true">✓</span>
+                <div>
+                  <h3>LLMs</h3>
+                  <p>
+                    Compatible con modelos como Qwen, Llama y otras alternativas
+                    abiertas.
+                  </p>
+                </div>
+              </li>
+              <li class="tech-item">
+                <span class="tech-check" aria-hidden="true">✓</span>
+                <div>
+                  <h3>TypeScript y Node.js</h3>
+                  <p>
+                    Núcleo MCP local, agnóstico de proveedor, con transporte
+                    stdio y datos en SQLite.
+                  </p>
+                </div>
+              </li>
+              <li class="tech-item">
+                <span class="tech-check" aria-hidden="true">✓</span>
+                <div>
+                  <h3>Python y FastAPI</h3>
+                  <p>
+                    Capa API prevista para futuras integraciones web y servicios
+                    de inferencia.
+                  </p>
+                </div>
+              </li>
+              <li class="tech-item">
+                <span class="tech-check" aria-hidden="true">✓</span>
+                <div>
+                  <h3>Cloudflare Pages</h3>
+                  <p>
+                    Despliegue global de la web con una entrega estática rápida
+                    y segura.
+                  </p>
+                </div>
+              </li>
+              <li class="tech-item">
+                <span class="tech-check" aria-hidden="true">✓</span>
+                <div>
+                  <h3>APIs de TCG</h3>
+                  <p>
+                    Integraciones para consultar información estructurada de
+                    cartas, mazos y expansiones.
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="equipo">
+        <div class="container">
+          <header class="section-header">
+            <p class="section-kicker">Proyecto</p>
+            <h2>Construido con visión de producto y tecnología abierta</h2>
+          </header>
+
+          <div class="team-roadmap">
+            <article class="founder-card">
+              <div class="avatar" aria-hidden="true">AI</div>
+              <h3>Pedro Muñoz</h3>
+              <p class="founder-role">Fundador &amp; Desarrollador Principal</p>
+              <p class="founder-bio">
+                Apasionado por la inteligencia artificial y los juegos de
+                cartas, crea herramientas que acercan tecnología avanzada a la
+                comunidad TCG.
+              </p>
+            </article>
+
+            <article class="roadmap-card" id="roadmap">
+              <p class="section-kicker">Roadmap</p>
+              <h2>Evolución del proyecto</h2>
+              <ol class="roadmap">
+                <li class="roadmap-item">
+                  <span class="roadmap-status" aria-hidden="true">✅</span>
+                  <div>
+                    <h3>Fase 1: Prototipo funcional (actual)</h3>
+                    <p>
+                      Servidor MCP operativo y primeras funciones de gestión de
+                      colecciones.
+                    </p>
+                  </div>
+                </li>
+                <li class="roadmap-item">
+                  <span class="roadmap-status" aria-hidden="true">⏳</span>
+                  <div>
+                    <h3>Fase 2: Beta abierta (Q4 2026)</h3>
+                    <p>
+                      Acceso para usuarios, validación del producto y mejoras
+                      basadas en feedback.
+                    </p>
+                  </div>
+                </li>
+                <li class="roadmap-item">
+                  <span class="roadmap-status" aria-hidden="true">📅</span>
+                  <div>
+                    <h3>Fase 3: Integración con más juegos TCG</h3>
+                    <p>
+                      Ampliación de la arquitectura para incorporar otros juegos
+                      y comunidades de cartas.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </article>
+          </div>
+
+          <section class="contact" id="contacto">
+            <div class="contact-panel">
+              <p class="section-kicker">Contacto</p>
+              <h2>¿Quieres colaborar o seguir el desarrollo?</h2>
+              <p>
+                Escríbenos para conocer el proyecto, proponer una integración o
+                contribuir al ecosistema open source.
+              </p>
+              <div class="contact-actions">
+                <a
+                  class="button button-primary"
+                  href="mailto:contacto@tcg-pocket.xyz"
+                  >contacto@tcg-pocket.xyz</a
+                >
+                <a
+                  class="button button-secondary"
+                  href="https://github.com/standnc/TcgPocketTracker"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Ver GitHub</a
+                >
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-content container">
+        <div class="footer-legal">
+          <p>© 2026 TCG Pocket MCP – Todos los derechos reservados.</p>
+          <p class="trademark">
+            Proyecto independiente no afiliado, patrocinado ni respaldado por
+            Nintendo, The Pokémon Company o sus asociados. Las marcas
+            mencionadas pertenecen a sus respectivos propietarios.
+          </p>
+        </div>
+        <nav class="footer-links" aria-label="Enlaces legales">
+          <a href="/privacy">Política de Privacidad</a>
+          <a href="/terms">Términos de Uso</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

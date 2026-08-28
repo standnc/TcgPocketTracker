@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="TCG Pocket MCP: servidor MCP open source con IA para Pokémon TCG Pocket">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f8cff"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#72c4ff"/>
+      <stop offset="0.6" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#67e8f9"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="14%" cy="12%" r="42%">
+      <stop offset="0" stop-color="#4f8cff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#4f8cff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="90%" cy="82%" r="46%">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="#070b18"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glowA)"/>
+  <rect width="1200" height="630" fill="url(#glowB)"/>
+  <rect x="8" y="8" width="1184" height="614" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <g font-family="'Segoe UI', system-ui, -apple-system, 'DejaVu Sans', sans-serif">
+    <!-- Brand row -->
+    <g transform="translate(96,92)">
+      <rect x="0" y="0" width="60" height="60" rx="15" fill="none" stroke="url(#brand)" stroke-width="2"/>
+      <rect x="18" y="12" width="24" height="36" rx="5" fill="none" stroke="url(#brand)" stroke-width="2.4"/>
+      <path d="M24 22h12M24 30h8M24 38h10" stroke="#72c4ff" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="80" y="40" fill="#f8fafc" font-size="30" font-weight="700" letter-spacing="-0.5">TCG Pocket MCP</text>
+    </g>
+
+    <!-- Eyebrow pill -->
+    <g transform="translate(96,214)">
+      <rect x="0" y="0" width="556" height="46" rx="23" fill="#1e40af" fill-opacity="0.16" stroke="#60a5fa" stroke-opacity="0.35"/>
+      <circle cx="26" cy="23" r="5" fill="#2dd4bf"/>
+      <text x="44" y="30" fill="#bfdbfe" font-size="18" font-weight="700" letter-spacing="2">OPEN SOURCE · IA + POKÉMON TCG POCKET</text>
+    </g>
+
+    <!-- Title -->
+    <text x="94" y="352" fill="#f8fafc" font-size="72" font-weight="800" letter-spacing="-2.5">Trackea tu colección</text>
+    <text x="94" y="436" fill="url(#title)" font-size="72" font-weight="800" letter-spacing="-2.5">con inteligencia artificial</text>
+
+    <!-- Subtitle -->
+    <text x="96" y="506" fill="#a8b3cf" font-size="27" font-weight="500">Servidor MCP · TypeScript · Node.js · SQLite · transporte stdio</text>
+
+    <!-- Domain -->
+    <text x="96" y="576" fill="#72c4ff" font-size="24" font-weight="700">tcg-pocket.xyz</text>
+  </g>
+</svg>
