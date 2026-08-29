@@ -20,11 +20,9 @@ PLACEHOLDER_HOSTNAME {
     }
 
     handle @mcp {
-        # Caddy reemplaza cualquier X-Forwarded-For aportado por el cliente.
-        # El limitador del proceso Node puede así identificar la IP real.
         reverse_proxy 127.0.0.1:8787 {
-            header_up -X-Forwarded-For
-            header_up X-Forwarded-For {remote_host}
+            # Caddy añade la IP remota a X-Forwarded-For. El proceso Node
+            # consume el último valor, no uno inyectado por el cliente.
             # Los request/response del MCP Streamable HTTP pueden ser JSON
             # directo o SSE; desactivamos buffering para no romper streams.
             flush_interval -1

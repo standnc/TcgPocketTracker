@@ -67,7 +67,7 @@ Todas deben anunciar `readOnlyHint: true`, `destructiveHint: false` y `openWorld
 
 - HTTPS público estable, preferiblemente `https://mcp.tcg-pocket.xyz/mcp`.
 - Token fuera de Git y comparación resistente a timing.
-- Límite de cuerpo, timeout, rate limiting por IP en el server y validación de `Origin`/`Host`. Caddy limpia y reescribe la IP reenviada.
+- Límite de cuerpo, timeout, rate limiting por IP en el server y validación de `Origin`/`Host`. Caddy añade la IP remota al encabezado reenviado y el server consume el último valor.
 - Logs por request y tool sin token, payload completo, resultados privados ni rutas locales.
 - SQLite en disco local persistente del VPS; nunca sobre NFS/SMB.
 - Backup consistente antes de copiar la base inicial y backups periódicos del volumen.
