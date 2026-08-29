@@ -2,7 +2,7 @@
 
 Servidor MCP local para un catálogo de Pokémon TCG Pocket y una colección personal en SQLite. Usa el estándar MCP con transporte stdio; no depende de Claude, Anthropic, OpenAI ni de ningún modelo concreto — cualquier cliente compatible con MCP puede lanzar el proceso.
 
-Este es un proyecto en fase de preparación, todavía no publicado. No lo instales pensando en usarlo como paquete público: hoy es un checkout local (`package.json` marcado como `"private": true`, sin remoto Git configurado).
+Este es un proyecto en fase de preparación, todavía no publicado como paquete. No lo instales pensando en usarlo como paquete público: `package.json` sigue marcado como `"private": true`.
 
 ## Qué funciona hoy (verificado)
 
@@ -67,7 +67,7 @@ Guardias implementadas dentro del server:
 - Solo `POST`/`GET` en `/mcp`; el resto devuelve `405` con JSON-RPC válido.
 - `GET /healthz` devuelve `200 text/plain "ok"` sin filtrar rutas ni versión.
 
-**Fuera de alcance de esta fase**: OAuth 2.1, acceso multiusuario, publicación en directorios MCP y despliegue automatizado. Antes de exponer datos privados a un endpoint público real hace falta OAuth 2.1 según el spec MCP. Para pruebas privadas puedes tunelizar con OpenAI Secure MCP Tunnel o Cloudflare Tunnel y el token estático. Los templates de systemd, Caddy y environment file viven en `deploy/`.
+**Fuera de alcance de esta fase**: OAuth 2.1, acceso multiusuario, publicación en directorios MCP y despliegue automatizado. Antes de exponer datos privados a un endpoint público real hace falta OAuth 2.1 según el spec MCP. El despliegue actual está limitado a catálogo de solo lectura y no debe recibir datos de colección privados. Los templates de systemd, Caddy y environment file viven en `deploy/`; consulta [CHANGELOG.md](CHANGELOG.md) para el estado comprobado el 2026-08-29.
 
 Variables (todas opcionales salvo `PTCGP_HTTP_TOKEN`): `PTCGP_HTTP_HOST` (default `127.0.0.1`), `PTCGP_HTTP_PORT` (default `8787`), `PTCGP_HTTP_TOKEN` (>= 32 caracteres, obligatoria), `PTCGP_HTTP_ALLOWED_HOSTS` (CSV, default `localhost,127.0.0.1`), `PTCGP_HTTP_ALLOWED_ORIGINS` (CSV, default vacío), `PTCGP_HTTP_BODY_LIMIT_KIB` (default `1024`), `PTCGP_HTTP_REQUEST_TIMEOUT_MS` (default `30000`), `PTCGP_HTTP_RATE_LIMIT_MAX` (default `60`), `PTCGP_HTTP_RATE_LIMIT_WINDOW_MS` (default `60000`) y `PTCGP_HTTP_RATE_LIMIT_MAX_KEYS` (default `10000`).
 
@@ -90,4 +90,4 @@ Flujo seguro de una ronda: `round_start` → `round_analyze_screenshots` → rev
 
 ## Límites actuales
 
-No hay CLI, transporte Streamable HTTP, backup/restore como funcionalidad del servidor, ni proceso de publicación. Las tools que dependen de red (sync de catálogo, enriquecimiento, mazos meta) no tienen tests de contrato ni protección ante cambios de esquema/maquetación upstream. Antes de ampliar el proyecto, lee [HANDOFF.md](HANDOFF.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md) y [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md).
+No hay CLI, backup/restore como funcionalidad del servidor, OAuth 2.1 ni proceso de publicación. La ruta HTTP inicial existe pero sigue limitada a catálogo de solo lectura y autenticación de token estático. Las tools que dependen de red (sync de catálogo, enriquecimiento, mazos meta) validan ahora respuestas con Zod, aunque aún no tienen tests de contrato ni una decisión cerrada sobre derechos de las fuentes. Antes de ampliar el proyecto, lee [CHANGELOG.md](CHANGELOG.md), [HANDOFF.md](HANDOFF.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md) y [OPEN_SOURCE_GAP_ANALYSIS.md](OPEN_SOURCE_GAP_ANALYSIS.md).

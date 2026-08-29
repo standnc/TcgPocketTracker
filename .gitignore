@@ -19,6 +19,7 @@ coverage/
 *.sqlite3-*
 backups/
 backup/
+.backups/
 data/
 
 # Personal captures and any derived OCR input

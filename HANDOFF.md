@@ -1,11 +1,27 @@
 # Handoff for the next agent
 
-Last updated: 2026-08-28. This file is the operational starting point for a future maintainer or agent. It records verified facts, current decisions, and the safe order for further work. Do not treat roadmap items as already implemented.
+Last updated: 2026-08-29. This file is the operational starting point for a future maintainer or agent. It records verified facts, current decisions, and the safe order for further work. Do not treat roadmap items as already implemented.
+
+## 2026-08-29 operational update
+
+- Current checkout branch: `landing-clean` at `6ab7ecf`, tracking
+  `origin/open-source-prep`. It contains all the phase-two work plus the
+  HTTP deployment and landing-page commits listed in [CHANGELOG.md](CHANGELOG.md).
+- The public landing and `https://mcp.tcg-pocket.xyz/healthz` both returned
+  HTTP 200 on 2026-08-29. The remote MCP path is deliberately catalog-only
+  and read-only; it must not be described as a multi-user collection API.
+- `.backups/` is an owner-local backup area and is ignored. Never add it,
+  screenshots, databases, tokens, or generated package artifacts to Git.
+- The next intended packaging task is a Windows-compatible `.mcpb` bundle for
+  Claude Desktop. Do not generate legacy `.dxt` files. Because this project
+  uses native Node dependencies (`better-sqlite3`, `sharp`), a bundle built
+  in WSL must not be claimed compatible with Windows without a Windows build
+  and validation.
 
 ## Repository and safety status
 
 - Working repository: `/home/pedro/proyectos/ptcgp-mcp-server` in Kali WSL.
-- Working branch: `open-source-prep`. It contains the completed Phase 2 work and is ahead of `main`; continue from this branch. Do not switch branches, reset, or discard commits without the owner’s instruction.
+- Working branch: `landing-clean`. It contains the completed Phase 2 work and the 2026-08-29 deployment/web updates; it tracks `origin/open-source-prep`. Do not switch branches, reset, or discard commits without the owner’s instruction.
 - Preparation commits:
   - `587166a chore: establish safe open source baseline`
   - `499fd2a docs: add web tracker implementation plan`
@@ -15,7 +31,7 @@ Last updated: 2026-08-28. This file is the operational starting point for a futu
   - `45f37c3 feat(remote): validate untrusted network responses with Zod`
   - `176cfb8 feat(db): consistent SQLite backup before migrations + phase-2 docs`
   - `b4aebd6 fix: protect round finalization and TCGdex enrichment`
-- Git remote: `origin` is `https://github.com/standnc/TcgPocketTracker.git`; this branch tracks `origin/open-source-prep`. The owner authorized this branch’s push. Do not publish to npm, register in MCP registries, or deploy without a separate explicit instruction.
+- Git remote: `origin` is `https://github.com/standnc/TcgPocketTracker.git`; this branch tracks `origin/open-source-prep`. The owner authorized this branch’s push. Do not publish to npm or register in MCP registries without a separate explicit instruction.
 - `package.json` has `"private": true`; retain it until the owner explicitly authorizes publication.
 - Production SQLite databases, WAL/SHM files, backups, captures, cookies, tokens, `.env` files, logs, and temporary outputs must remain outside Git. `.gitignore` protects these paths, but an ignored file is still private and must not be copied into fixtures or documentation.
 - Tests and smoke checks must use a temporary `PTCGP_DATA_DIR`. Do not run a migration, sync, OCR round, or recovery test against the owner’s live directory without explicit approval and a verified SQLite-aware backup.
@@ -43,7 +59,7 @@ Verified implementation properties:
 - OCR accuracy, screenshot coverage, and automatic capture completion are not proven by the public test corpus. Human review before a round is finalized is mandatory.
 - HEIC/HEIF is allow-listed in code but not supported by the audited Sharp build: its HEIF input suffix list contains only `.avif`. Do not claim iPhone HEIC support until a suitable build and legal fixture prove it.
 - Network-based catalog, enrichment, Limitless/meta-deck and decklist features are implementation-present. Their response shapes are now validated with Zod (a clear, source-labeled error on upstream drift; `src/remote-validation.ts`), but they still lack hermetic HTTP fixtures, a completed source-rights decision, and a rate-limit policy.
-- There is no backup/restore MCP tool, downgrade path, CLI, Streamable HTTP transport, authentication layer, metrics, correlation IDs, or logging redaction policy. A consistent backup is now written automatically before a migration runs against a database that already holds data (`VACUUM INTO <data_dir>/backups/collection-pre-migration-*.db`), but there is still no in-band restore tool: recovery is opening/copying that snapshot.
+- There is no backup/restore MCP tool, downgrade path, CLI, OAuth 2.1 authentication layer, metrics, correlation IDs, or logging redaction policy. A catalog-only HTTP transport exists and is guarded by a static token, host/origin allowlists and rate limiting; it is not a replacement for OAuth or a multi-user API. A consistent backup is now written automatically before a migration runs against a database that already holds data (`VACUUM INTO <data_dir>/backups/collection-pre-migration-*.db`), but there is still no in-band restore tool: recovery is opening/copying that snapshot.
 - SQLite is the correct local single-user store today. It is not the chosen store for the future multi-user tracker; see `WEB_TRACKER_PLAN.md`.
 
 ## Technology baseline and commands
@@ -110,8 +126,8 @@ Acceptance criteria: all 17 tools keep their names and observed behavior, the si
 
 ## Explicit non-goals until approved
 
-- No npm publication, remote push, official MCP registry, Smithery, or public GitHub repository changes.
-- No Streamable HTTP, web UI, complete CLI, OAuth/auth, VPS deployment, PostgreSQL migration, or new OCR engine in this repository.
+- No npm publication, official MCP registry, Smithery, or public GitHub repository changes without explicit approval.
+- No complete CLI, OAuth/auth, PostgreSQL migration, or new OCR engine in this repository without explicit approval. The initial catalog-only HTTP deployment and the static landing already exist; extend them only with a specific, reviewed scope.
 - No copying real screenshots, databases, backups, browser cookies, source data, or third-party card images into Git, tests, issues, or package artifacts.
 
 ## Related tracker project
