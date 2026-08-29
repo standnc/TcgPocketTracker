@@ -33,7 +33,10 @@
     "start:http": "node dist/http.js",
     "sync": "node dist/scripts/sync-catalog.js",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
-    "inspect:http": "npx @modelcontextprotocol/inspector http://127.0.0.1:8787/mcp"
+    "inspect:http": "npx @modelcontextprotocol/inspector http://127.0.0.1:8787/mcp",
+    "mcpb:build": "npm run build && node desktop-extension/scripts/build.mjs",
+    "mcpb:validate": "npx --yes @anthropic-ai/mcpb@2 validate desktop-extension/build/manifest.json",
+    "mcpb:pack": "mkdir -p artifacts && npx --yes @anthropic-ai/mcpb@2 pack desktop-extension/build artifacts/ptcgp-mcp-server-desktop-extension.mcpb"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -71,6 +71,23 @@ Guardias implementadas dentro del server:
 
 Variables (todas opcionales salvo `PTCGP_HTTP_TOKEN`): `PTCGP_HTTP_HOST` (default `127.0.0.1`), `PTCGP_HTTP_PORT` (default `8787`), `PTCGP_HTTP_TOKEN` (>= 32 caracteres, obligatoria), `PTCGP_HTTP_ALLOWED_HOSTS` (CSV, default `localhost,127.0.0.1`), `PTCGP_HTTP_ALLOWED_ORIGINS` (CSV, default vacío), `PTCGP_HTTP_BODY_LIMIT_KIB` (default `1024`), `PTCGP_HTTP_REQUEST_TIMEOUT_MS` (default `30000`), `PTCGP_HTTP_RATE_LIMIT_MAX` (default `60`), `PTCGP_HTTP_RATE_LIMIT_WINDOW_MS` (default `60000`) y `PTCGP_HTTP_RATE_LIMIT_MAX_KEYS` (default `10000`).
 
+## Bundle para Claude Desktop en Windows (MCPB)
+
+`desktop-extension/` contiene el empaquetado como MCP Bundle (`.mcpb`,
+`manifest_version: 0.3`) para Claude Desktop en Windows. Scripts npm:
+
+```bash
+npm run mcpb:build      # compila y prepara desktop-extension/build/ con prebuilds Windows x64
+npm run mcpb:validate   # valida manifest.json con @anthropic-ai/mcpb
+npm run mcpb:pack       # produce artifacts/ptcgp-mcp-server-desktop-extension.mcpb
+```
+
+Instrucciones detalladas de instalación, desinstalación, limitaciones (native
+deps de `better-sqlite3` y `sharp`, WSL/Linux vs Windows) y una alternativa
+sin bundle basada en un puente `wsl.exe` viven en
+[`desktop-extension/README.md`](desktop-extension/README.md). El artefacto
+`.mcpb` se genera en `artifacts/`, ignorado por Git.
+
 ## Tools MCP
 
 | Grupo             | Tools                                                                                                                          |

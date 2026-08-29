@@ -12,11 +12,12 @@ Last updated: 2026-08-29. This file is the operational starting point for a futu
   and read-only; it must not be described as a multi-user collection API.
 - `.backups/` is an owner-local backup area and is ignored. Never add it,
   screenshots, databases, tokens, or generated package artifacts to Git.
-- The next intended packaging task is a Windows-compatible `.mcpb` bundle for
-  Claude Desktop. Do not generate legacy `.dxt` files. Because this project
-  uses native Node dependencies (`better-sqlite3`, `sharp`), a bundle built
-  in WSL must not be claimed compatible with Windows without a Windows build
-  and validation.
+- The Windows-targeted `.mcpb` source packaging now lives in
+  `desktop-extension/`. Its generated artifact/build are ignored by Git and
+  the manifest validates with the MCPB CLI. Do not generate legacy `.dxt`
+  files. Because this project uses native Node dependencies
+  (`better-sqlite3`, `sharp`), installation and execution in Claude Desktop
+  Windows still require manual validation against the app's embedded Node ABI.
 
 ## Repository and safety status
 

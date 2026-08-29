@@ -47,3 +47,8 @@ temp/
 
 # Bundle local de herramientas; no forma parte del runtime HTTP desplegable.
 deploy/mcpb/
+
+# Artefactos generados y build intermedio del bundle MCPB para Claude Desktop.
+artifacts/
+desktop-extension/build/
+desktop-extension/**/node_modules/

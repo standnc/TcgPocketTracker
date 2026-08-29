@@ -66,8 +66,13 @@ funcionalidad publicada.
 
 - El paquete npm permanece marcado como `private`; no hay publicación npm,
   registro MCP ni lanzamiento de un paquete de escritorio.
-- Un bundle para Claude Desktop (`.mcpb`) está pendiente. `.dxt` es un nombre
-  obsoleto y no debe generarse como segundo artefacto.
+- El código de empaquetado para Claude Desktop (`.mcpb`) ya está incluido en
+  `desktop-extension/`. Genera un artefacto de 53,2 MB con dependencias
+  Windows x64 y pasa la validación de esquema MCPB; el artefacto y el build
+  quedan fuera de Git. `.dxt` es un nombre obsoleto y no debe generarse.
+- La instalación y ejecución dentro de Claude Desktop para Windows, incluida
+  la ABI concreta de su Node embebido, aún requieren una prueba manual en
+  Windows.
 - Supabase fue aprovisionado fuera de este repositorio, pero no se ha
   integrado en el código ni se ha migrado la colección local.
 - La exactitud OCR, los derechos y estabilidad de fuentes externas, OAuth,

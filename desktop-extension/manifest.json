@@ -1,0 +1,47 @@
+{
+  "manifest_version": "0.3",
+  "name": "ptcgp-mcp-server",
+  "display_name": "Pokémon TCG Pocket",
+  "version": "1.1.0",
+  "description": "Catálogo y colección local de Pokémon TCG Pocket vía MCP (17 herramientas sobre stdio).",
+  "long_description": "Servidor MCP local que expone tu catálogo SQLite de Pokémon TCG Pocket a un cliente MCP como Claude Desktop. Incluye búsqueda de cartas, estadísticas de colección, cartas faltantes por sobre, ranking de mazos meta desde Limitless y análisis OCR local de capturas para registrar rondas de sobres. La base de datos, capturas y backups se quedan en tu equipo; el servidor no sube imágenes ni datos personales.",
+  "author": {
+    "name": "standnc"
+  },
+  "license": "MIT",
+  "keywords": ["pokemon", "tcg", "pocket", "sqlite", "collection", "ocr"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "PTCGP_DATA_DIR": "${user_config.data_dir}",
+        "PTCGP_LOG_LEVEL": "${user_config.log_level}"
+      }
+    }
+  },
+  "user_config": {
+    "data_dir": {
+      "type": "directory",
+      "title": "Directorio de datos (PTCGP_DATA_DIR)",
+      "description": "Carpeta donde se creará collection.db y los backups previos a migración. Por defecto: %LOCALAPPDATA%\\ptcgp-mcp (equivalente a ${HOME}/AppData/Local/ptcgp-mcp). Elige una ruta que puedas respaldar tú mismo.",
+      "default": "${HOME}/AppData/Local/ptcgp-mcp",
+      "required": true
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Nivel de log (PTCGP_LOG_LEVEL)",
+      "description": "Uno de: fatal, error, warn, info, debug, trace, silent. Los logs van a stderr; stdout está reservado al protocolo MCP.",
+      "default": "info",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["win32"],
+    "runtimes": {
+      "node": ">=22 <25"
+    }
+  }
+}
