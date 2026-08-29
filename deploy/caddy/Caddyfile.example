@@ -2,6 +2,12 @@
 # Reemplaza PLACEHOLDER_HOSTNAME por tu dominio (ej. mcp.example.com) antes de
 # instalar. Caddy gestiona TLS automáticamente vía Let's Encrypt.
 
+{
+    # Fuerza la CA pública al terminar un despliegue que antes falló por DNS.
+    # Caddy puede usar su CA de staging temporalmente tras varios errores.
+    acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
 PLACEHOLDER_HOSTNAME {
     encode zstd gzip
 
