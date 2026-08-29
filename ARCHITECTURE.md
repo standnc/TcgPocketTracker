@@ -2,10 +2,16 @@
 
 ## Estado actual
 
-El servidor es un único proceso Node/TypeScript que expone 17 tools MCP sobre transporte stdio. Las reglas de negocio con más invariantes —rondas de captura y mutaciones de colección— viven ya en un núcleo framework-free (`src/domain/`), y sus tools MCP son adaptadores finos que leen/escriben SQLite y delegan las decisiones en ese núcleo. Las demás tools (catálogo, mazos) todavía registran su Zod schema y ejecutan SQL directamente dentro del callback del handler; migrarlas es trabajo incremental pendiente.
+El servidor es un único proceso Node/TypeScript. La composición del `McpServer` vive en `src/server/factory.ts`; los dos entrypoints (stdio y HTTP) reutilizan esa factoría y difieren solo en el transporte y en la lista de tools registradas. Stdio expone las 17 tools completas; HTTP expone exclusivamente 7 tools de lectura mediante una allowlist (`REMOTE_TOOL_NAMES`). Las reglas de negocio con más invariantes —rondas de captura y mutaciones de colección— viven ya en un núcleo framework-free (`src/domain/`), y sus tools MCP son adaptadores finos que leen/escriben SQLite y delegan las decisiones en ese núcleo. Las demás tools (catálogo, mazos) todavía registran su Zod schema y ejecutan SQL directamente dentro del callback del handler; migrarlas es trabajo incremental pendiente.
 
 ```text
-src/index.ts                 Arranque del McpServer, conexión StdioServerTransport
+src/index.ts                 Entrypoint stdio: usa la factoría con las 17 tools completas
+src/http.ts                  Entrypoint HTTP: arranca node:http con createHttpApp y publica /mcp + /healthz
+src/server/factory.ts        Factoría createMcpServer({ include? }) y REMOTE_TOOL_NAMES (7 tools de lectura)
+src/http/config.ts           Zod + resolveHttpConfig(env): host, puerto, token, allowlists, body-limit, timeout y rate limit
+src/http/guards.ts           bearerToken/verifyToken (timingSafeEqual), Host/Origin, readJsonBody, redactHeaders
+src/http/rate-limit.ts       Ventana fija en memoria por IP, acotada por max_keys
+src/http/app.ts              RequestListener: rutas POST/GET /mcp con transport stateless + rate limit + 405/404 + /healthz
 src/config.ts                Configuración validada con Zod (PTCGP_DATA_DIR, PTCGP_LOG_LEVEL)
 src/logger.ts                Logger Pino a stderr
 src/db.ts                    Conexión SQLite, pragmas, migraciones, backup previo a migrar, helpers de mapeo de cartas
@@ -16,13 +22,15 @@ src/remote-validation.ts     Guardia Zod para respuestas de red no confiables
 src/screenshot-analyzer.ts   Normalización de imagen (Sharp) + OCR local (Tesseract.js) + heurística de huecos
 src/sync.ts                  Sincronización de catálogo (GitHub raw) + enriquecimiento (TCGdex), con respuestas validadas por Zod
 src/limitless.ts             Scraping HTML de Limitless TCG para mazos meta y decklists, con datos parseados validados por Zod
-src/tools/catalog.ts         Registro de tools MCP: búsqueda/consulta/listado/sync/enrich
-src/tools/collection.ts      Registro de tools MCP: stats/missing/set/bulk/mark_range (adaptador fino sobre src/domain/collection.ts)
-src/tools/decks.ts           Registro de tools MCP: meta_decks/get_decklist
-src/tools/rounds.ts          Registro de tools MCP: ciclo de vida de rondas (adaptador fino sobre src/domain/rounds.ts)
-src/scripts/smoke.ts         Smoke test aislado (stdio + SQLite temporal)
+src/tools/catalog.ts         Registro de tools MCP: búsqueda/consulta/listado/sync/enrich (aceptan allowlist)
+src/tools/collection.ts      Registro de tools MCP: stats/missing/set/bulk/mark_range (aceptan allowlist)
+src/tools/decks.ts           Registro de tools MCP: meta_decks/get_decklist (aceptan allowlist)
+src/tools/rounds.ts          Registro de tools MCP: ciclo de vida de rondas (aceptan allowlist)
+src/scripts/smoke.ts         Smoke stdio: lista tools sobre base temporal
+src/scripts/smoke-http.ts    Smoke HTTP: arranca dist/http.js con token efímero y verifica las 7 tools
 src/scripts/sync-catalog.ts  Script para ejecutar la sincronización fuera del servidor MCP
-src/tests/*                  Tests con el runner nativo de Node
+src/tests/*                  Tests con el runner nativo de Node (incluye http.test.ts y http.guards.test.ts)
+deploy/                       Plantillas genéricas de systemd, Caddy y environment file (sin secretos)
 ```
 
 Puntos fuertes de este estado, verificados en la auditoría de esta fase:
@@ -76,12 +84,23 @@ De mayor a menor prioridad, basado en dónde vive la lógica más compleja y mej
 
 Además, y aunque no es una extracción, se cerró el otro ítem frágil de la fase 2: validación Zod de las respuestas de red (`src/remote-validation.ts`, con esquemas en `sync.ts` y `limitless.ts`), para fallar con un error claro y con la fuente/ruta ante un cambio de esquema upstream.
 
-### Streamable HTTP: solo documentado, no implementado
+### Streamable HTTP: fase inicial implementada
 
-Esta fase mantiene stdio como único transporte. Si en el futuro se añade Streamable HTTP (según la especificación MCP), debería:
+La primera versión del transporte HTTP MCP Streamable ya está en el árbol y coexiste con stdio. Ambos comparten la factoría `createMcpServer` y difieren solo en dos ejes:
 
-- reutilizar el mismo `McpServer` y los mismos casos de uso, registrando un transporte adicional en vez de un segundo servidor;
-- añadir autenticación/autorización explícita, porque a diferencia de stdio (proceso local de un único usuario), un transporte HTTP expone el servidor a una superficie de red compartida;
-- definirse en un documento propio antes de tocar código, dado que introduce preguntas (sesiones, CORS, límites de payload) que hoy no existen.
+- **Transporte**: stdio (`src/index.ts`) monta un `StdioServerTransport` de por vida; HTTP (`src/http.ts`) monta `node:http` y por cada `POST /mcp` crea un `StreamableHTTPServerTransport` en modo **stateless** (`sessionIdGenerator: undefined`, `enableJsonResponse: true`) contra un `McpServer` recién construido con `include = REMOTE_TOOL_NAMES`. Al terminar el request se cierra transport y server.
+- **Superficie**: stdio anuncia 17 tools; HTTP anuncia exclusivamente 7 tools de lectura. No hay tools duplicadas ni handlers separados: cada `registerXxxTools` acepta `options.include` y envuelve cada `server.registerTool(...)` con un guard.
 
-No se implementa nada de esto todavía; queda registrado aquí como dirección, no como trabajo pendiente de esta fase.
+Guardias del entrypoint HTTP, todas ejecutadas antes de instanciar el server MCP:
+
+1. `Host` (allowlist configurable). Rechazo 403.
+2. `Origin` (allowlist configurable; vacía = deniega cross-site, permite ausencia). Rechazo 403.
+3. `Authorization: Bearer <token>` obligatorio; comparación `crypto.timingSafeEqual` con normalización SHA-256 cuando las longitudes difieren. Rechazo 401 con `WWW-Authenticate: Bearer`.
+4. Rate limit en memoria por IP antes de autenticar (60/min/IP por defecto; Caddy reescribe `X-Forwarded-For`). Rechazo 429.
+5. Lectura del cuerpo con límite y timeout. Excede → 413 con `Connection: close`; timeout → 408.
+6. `POST` y `GET` en `/mcp`, resto → 405 con `Allow: GET, POST` y cuerpo JSON-RPC.
+7. `GET /healthz` sin auth → 200 `text/plain "ok\n"`.
+
+Cada request se registra con method, path, status, ms y ip; las cabeceras `authorization` y `cookie` se redactan antes de loguear. El logger sigue emitiendo pino JSON a stderr — stdout queda reservado para clientes stdio.
+
+Fuera de alcance de esta fase, documentado y sin implementar aún: OAuth 2.1 conforme al spec MCP (protected-resource metadata, discovery del authorization server, PKCE S256, validación de audiencia/scopes, `WWW-Authenticate` challenge), acceso multiusuario, publicación en directorios de plugins/MCP y migración de SQLite. Antes de exponer datos privados a un endpoint público real (multi-usuario o publicación) hay que implementar OAuth 2.1: el token estático solo se acepta como puente durante pruebas privadas.

@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 screenshots/
+.claude/
 .env
 .env.*
 *.db
@@ -12,3 +13,7 @@ screenshots/
 *.sqlite3
 *.sqlite3-*
 *.log
+# Páginas de landing generadas: mantener el HTML tal cual está publicado.
+privacy.html
+terms.html
+index.html

@@ -44,6 +44,33 @@ Nunca ejecutes tests, sync o rondas contra tu `PTCGP_DATA_DIR` real sin backup p
 
 El servidor usa stdout exclusivamente para el protocolo MCP; nunca escribas ahí manualmente. `PTCGP_LOG_LEVEL` acepta `fatal|error|warn|info|debug|trace|silent` (por defecto `info`) y controla logs estructurados en stderr — hoy el logging operativo es mínimo (solo arranque/errores fatales), así que no confíes en él para depurar el comportamiento de una tool concreta todavía.
 
+## Transporte HTTP (fase inicial)
+
+Existe un segundo entrypoint pensado para clientes remotos (ChatGPT en Developer Mode, MCP Inspector desde otra máquina, etc.). Expone en `/mcp` el mismo `McpServer` pero registrando **solo 7 tools de lectura** (`ptcgp_search_cards`, `ptcgp_get_card`, `ptcgp_list_expansions`, `ptcgp_collection_stats`, `ptcgp_missing_cards`, `ptcgp_meta_decks`, `ptcgp_get_decklist`). Las 17 tools de stdio siguen intactas.
+
+Arranque local:
+
+```bash
+export PTCGP_HTTP_TOKEN="$(openssl rand -hex 32)"
+export PTCGP_DATA_DIR=/ruta/absoluta/fuera-del-repo/ptcgp-mcp-data
+npm run start:http     # escucha en 127.0.0.1:8787 por defecto
+```
+
+Prueba con el Inspector: `npm run inspect:http` (pasa el token en `Authorization: Bearer …` en la UI). El binario stdio se sigue publicando en `bin`; el HTTP no.
+
+Guardias implementadas dentro del server:
+
+- Token estático obligatorio comparado con `crypto.timingSafeEqual`.
+- Allowlist de `Host` (defensa contra DNS rebinding) y de `Origin` (por defecto vacía → deniega cualquier cross-site).
+- Body limit y timeout configurables por env.
+- Rate limit en memoria por IP (60 peticiones/minuto/IP por defecto), antes de autenticar.
+- Solo `POST`/`GET` en `/mcp`; el resto devuelve `405` con JSON-RPC válido.
+- `GET /healthz` devuelve `200 text/plain "ok"` sin filtrar rutas ni versión.
+
+**Fuera de alcance de esta fase**: OAuth 2.1, acceso multiusuario, publicación en directorios MCP y despliegue automatizado. Antes de exponer datos privados a un endpoint público real hace falta OAuth 2.1 según el spec MCP. Para pruebas privadas puedes tunelizar con OpenAI Secure MCP Tunnel o Cloudflare Tunnel y el token estático. Los templates de systemd, Caddy y environment file viven en `deploy/`.
+
+Variables (todas opcionales salvo `PTCGP_HTTP_TOKEN`): `PTCGP_HTTP_HOST` (default `127.0.0.1`), `PTCGP_HTTP_PORT` (default `8787`), `PTCGP_HTTP_TOKEN` (>= 32 caracteres, obligatoria), `PTCGP_HTTP_ALLOWED_HOSTS` (CSV, default `localhost,127.0.0.1`), `PTCGP_HTTP_ALLOWED_ORIGINS` (CSV, default vacío), `PTCGP_HTTP_BODY_LIMIT_KIB` (default `1024`), `PTCGP_HTTP_REQUEST_TIMEOUT_MS` (default `30000`), `PTCGP_HTTP_RATE_LIMIT_MAX` (default `60`), `PTCGP_HTTP_RATE_LIMIT_WINDOW_MS` (default `60000`) y `PTCGP_HTTP_RATE_LIMIT_MAX_KEYS` (default `10000`).
+
 ## Tools MCP
 
 | Grupo             | Tools                                                                                                                          |

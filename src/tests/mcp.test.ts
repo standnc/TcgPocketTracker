@@ -227,6 +227,32 @@ test("una ronda que no cuadra queda bloqueada sin tocar la colección", async ()
   });
 });
 
+test("stdio anuncia exactamente las 17 tools del catálogo completo", async () => {
+  await withServer(async (client) => {
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name).sort();
+    assert.deepEqual(names, [
+      "ptcgp_bulk_update_collection",
+      "ptcgp_collection_stats",
+      "ptcgp_enrich_catalog",
+      "ptcgp_get_card",
+      "ptcgp_get_decklist",
+      "ptcgp_list_expansions",
+      "ptcgp_mark_range",
+      "ptcgp_meta_decks",
+      "ptcgp_missing_cards",
+      "ptcgp_round_analyze_screenshots",
+      "ptcgp_round_finalize",
+      "ptcgp_round_record",
+      "ptcgp_round_start",
+      "ptcgp_round_status",
+      "ptcgp_search_cards",
+      "ptcgp_set_card_quantity",
+      "ptcgp_sync_catalog",
+    ]);
+  });
+});
+
 test("round_status lista los números reales de las cartas sin confirmar", async () => {
   await withServer(async (client, dataDir) => {
     const started = parseToolText(

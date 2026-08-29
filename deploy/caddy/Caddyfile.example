@@ -1,0 +1,37 @@
+# Caddyfile de ejemplo para exponer ptcgp-mcp-server HTTP detrás de HTTPS.
+# Reemplaza PLACEHOLDER_HOSTNAME por tu dominio (ej. mcp.example.com) antes de
+# instalar. Caddy gestiona TLS automáticamente vía Let's Encrypt.
+
+PLACEHOLDER_HOSTNAME {
+    encode zstd gzip
+
+    # Exponemos solo MCP y healthcheck; el server Node permanece en loopback.
+    @health path /healthz
+    @mcp path /mcp /mcp/*
+
+    handle @health {
+        reverse_proxy 127.0.0.1:8787
+    }
+
+    handle @mcp {
+        # Caddy reemplaza cualquier X-Forwarded-For aportado por el cliente.
+        # El limitador del proceso Node puede así identificar la IP real.
+        reverse_proxy 127.0.0.1:8787 {
+            header_up -X-Forwarded-For
+            header_up X-Forwarded-For {remote_host}
+            # Los request/response del MCP Streamable HTTP pueden ser JSON
+            # directo o SSE; desactivamos buffering para no romper streams.
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+
+    respond "not found" 404
+
+    log {
+        output file /var/log/caddy/ptcgp-mcp.log
+        format json
+    }
+}

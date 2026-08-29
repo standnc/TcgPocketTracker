@@ -43,3 +43,6 @@ temp/
 .vscode/
 .idea/
 *.tsbuildinfo
+
+# Bundle local de herramientas; no forma parte del runtime HTTP desplegable.
+deploy/mcpb/

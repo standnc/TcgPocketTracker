@@ -26,11 +26,14 @@
     "format:write": "prettier --write .",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "smoke": "npm run build && node dist/scripts/smoke.js",
+    "smoke:http": "npm run build && node dist/scripts/smoke-http.js",
     "pack:check": "npm pack --dry-run",
-    "verify": "npm run format && npm run lint && npm run test && npm run smoke && npm run pack:check",
+    "verify": "npm run format && npm run lint && npm run test && npm run smoke && npm run smoke:http && npm run pack:check",
     "start": "node dist/index.js",
+    "start:http": "node dist/http.js",
     "sync": "node dist/scripts/sync-catalog.js",
-    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "inspect:http": "npx @modelcontextprotocol/inspector http://127.0.0.1:8787/mcp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

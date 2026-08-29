@@ -1,0 +1,37 @@
+[Unit]
+Description=ptcgp-mcp-server (transporte HTTP MCP Streamable)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ptcgp-mcp
+Group=ptcgp-mcp
+WorkingDirectory=/opt/ptcgp-mcp-server/current
+EnvironmentFile=/etc/ptcgp-mcp-server/http.env
+ExecStart=/usr/bin/node /opt/ptcgp-mcp-server/current/dist/http.js
+Restart=on-failure
+RestartSec=5
+UMask=0027
+
+# --- Hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ptcgp-mcp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+# V8 necesita memoria W^X para JIT/baseline; activarlo provoca SIGTRAP.
+MemoryDenyWriteExecute=false
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
